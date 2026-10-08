@@ -1,0 +1,12 @@
+{
+  "name": "eadmin602",
+  "private": true,
+  "description": "Login, one-time password links and roles for the Squadron 602 aircraft status system: static pages (docs/, GitHub Pages) and a Google Apps Script back end (backend/Code.gs).",
+  "type": "module",
+  "scripts": {
+    "test": "node test/run_all.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}

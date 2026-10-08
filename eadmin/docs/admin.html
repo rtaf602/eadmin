@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Admin ให้สิทธิ์ ฝูง.602</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <p class="unit">ฝูง.602 บน.6 · สถานภาพอากาศยาน</p>
+      <h1>ให้สิทธิ์ผู้ใช้งาน</h1>
+      <p class="sub">สร้าง Password ครั้งแรก, Reset Password และเปลี่ยน Role</p>
+    </div>
+    <div class="who">
+      <span class="chip" id="me-name"></span>
+      <span class="chip acc" id="me-role"></span>
+      <a class="btn small" href="index.html">หน้าแรก</a>
+      <button type="button" class="btn small" id="out">ออกจากระบบ</button>
+    </div>
+  </header>
+
+  <p class="note" id="wait">กำลังโหลดรายชื่อ…</p>
+  <div class="note bad" id="denied" role="alert" hidden>
+    <p id="denied-t"></p>
+    <div class="actions"><a class="btn small" href="index.html">กลับหน้าแรก</a><button type="button" class="btn small" id="retry" hidden>ลองอีกครั้ง</button></div>
+  </div>
+
+  <div class="bench" id="bench" hidden>
+    <form class="panel" id="grant" novalidate autocomplete="off">
+      <fieldset class="step">
+        <legend><span class="no">1.1</span>ให้สิทธิ์ใคร</legend>
+        <div class="combo">
+          <input type="text" id="who" role="combobox" aria-expanded="false" aria-controls="who-list" aria-autocomplete="list" placeholder="พิมพ์ชื่อ-สกุลเพื่อค้นหา" aria-label="ชื่อ-สกุลของผู้ที่จะให้สิทธิ์">
+          <ul id="who-list" role="listbox" hidden></ul>
+        </div>
+        <p class="hint" id="who-hint">เลือกได้เฉพาะชื่อที่อยู่ใน LOGIN DATABASE วงเล็บท้ายชื่อคือตำแหน่งงาน</p>
+        <div class="chips" id="who-info" hidden></div>
+      </fieldset>
+
+      <div id="after" class="stack" hidden>
+        <p class="note bad" id="lock" hidden></p>
+        <p class="note warn" id="miss" hidden></p>
+
+        <div class="note warn" id="had" hidden>
+          <p><b class="t">บัญชีนี้เคยตั้ง Password แล้ว</b></p>
+          <div class="seg" role="radiogroup" aria-label="สิ่งที่ต้องการทำ">
+            <label><input type="radio" name="mode" id="m-reset" value="reset" checked>Reset Password</label>
+            <label><input type="radio" name="mode" id="m-role" value="role">เปลี่ยน Role</label>
+          </div>
+        </div>
+
+        <fieldset class="step">
+          <legend><span class="no">1.2</span><label for="uname">Username</label></legend>
+          <input type="text" id="uname" class="mono" spellcheck="false" autocapitalize="off">
+          <p class="hint" id="uname-hint"></p>
+          <p class="err" id="uname-err" role="alert" hidden></p>
+        </fieldset>
+
+        <fieldset class="step">
+          <legend><span class="no">1.3</span><label for="role">Role</label></legend>
+          <select id="role"></select>
+          <p class="hint" id="role-hint"></p>
+        </fieldset>
+
+        <fieldset class="step">
+          <legend><span class="no" aria-hidden="true"></span>วันสิ้นสุดการใช้งาน</legend>
+          <div class="dp" id="end"></div>
+          <p class="hint" id="end-hint"></p>
+        </fieldset>
+
+        <div class="note warn" id="selfc" hidden>
+          <p><b class="t">คุณกำลังลด Role ของตัวเอง</b> หลังบันทึก คุณจะเข้าหน้า Admin ไม่ได้อีก และเปลี่ยนกลับเองไม่ได้ ต้องให้ <span class="mono" id="selfc-main"></span> แก้ให้</p>
+          <div class="actions">
+            <button type="button" class="btn primary" id="selfc-yes">ยืนยันการลด Role</button>
+            <button type="button" class="btn" id="selfc-no">ยกเลิก</button>
+          </div>
+        </div>
+
+        <div class="actions" id="actions">
+          <span class="no">1.4</span>
+          <button type="submit" class="btn primary" id="go">Generate One Time Link</button>
+          <span class="hint" id="go-why"></span>
+        </div>
+        <p class="note bad" id="fail" role="alert" hidden></p>
+        <p class="note ok" id="done" role="status" hidden></p>
+      </div>
+    </form>
+
+    <aside class="side">
+      <section class="panel" aria-labelledby="rights-h">
+        <h2 id="rights-h">สิทธิ์ของคุณกับบัญชีนี้</h2>
+        <div id="rights-body"></div>
+      </section>
+
+      <section class="panel" id="linkbox" aria-labelledby="link-h" hidden>
+        <h2 id="link-h">One Time Link</h2>
+        <p id="lk-for"></p>
+        <div class="linkrow">
+          <input type="text" id="lk-url" class="mono" readonly aria-label="One Time Link">
+          <button type="button" class="btn" id="lk-copy">คัดลอกลิงก์</button>
+        </div>
+        <p class="timer"><span id="lk-left">30:00</span><small id="lk-state"></small></p>
+        <p class="hint">ลิงก์นี้แสดงครั้งเดียว ถ้าปิดหรือโหลดหน้านี้ใหม่ก่อนคัดลอก ต้อง Generate ใหม่ ระบบเก็บเฉพาะค่า hash ของลิงก์ ไม่เก็บตัวลิงก์</p>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(() => {
+  'use strict';
+  const { $, esc, api, session, signOut, now, fmtD, mmss, beYear, years, buildDP, dp, setDP, disableDP } = App;
+  if (!session()) { location.replace('index.html'); return; }
+  const USER_RE = /^[a-z][a-z0-9_.]{2,29}$/;
+  let people = [], me = null, mainAdmin = '', today = '', linkMinutes = 30;
+  let target = null, mode = 'reset', confirmSelf = false, done = '', fail = '', busy = false, last = null;
+  buildDP('end', years(beYear(), beYear() + 10));
+  const full = (p) => (p.rank ? p.rank + ' ' : '') + p.name, label = (p) => full(p) + ' (' + p.pos + ')';
+
+  // What I may do to this account. The same rules are applied again by the back end; this only decides what to show.
+  function perm(t) {
+    const o = { link: false, user: false, role: false, admin: false, end: false, why: '' };
+    if (!me.isSuper && t.isSuper) { o.why = 'บัญชี ' + mainAdmin + ' แก้ไขได้เฉพาะเจ้าของบัญชี Admin คนอื่นเปลี่ยน Role แก้ Username หรือ Reset Password ให้ไม่ได้'; return o; }
+    if (!me.isSuper && t.role === 'Admin' && !t.isMe) { o.why = 'Admin ด้วยกันเปลี่ยน Role หรือ Reset Password ให้กันไม่ได้ ต้องให้ ' + mainAdmin + ' ดำเนินการ'; return o; }
+    o.link = true; o.user = me.isSuper; o.role = !(me.isSuper && t.isMe); o.admin = me.isSuper && !t.isMe; o.end = !t.isSuper;
+    return o;
+  }
+
+  /* ---------- the list of names: type to search, pick from the list only ---------- */
+  const who = $('who'), listEl = $('who-list');
+  let shown = [], hi = -1;
+  function drawList() {
+    let h = '', g = null;
+    shown.forEach((p, i) => {
+      if (p.group !== g) { g = p.group; if (g) h += '<li class="grp" role="presentation">' + esc(g) + '</li>'; }
+      h += '<li role="option" id="opt-' + i + '" data-i="' + i + '" aria-selected="' + (i === hi) + '">' + esc(label(p)) + '</li>';
+    });
+    listEl.innerHTML = h || '<li class="none" role="presentation">ไม่พบชื่อนี้ในฐานข้อมูล</li>';
+    listEl.hidden = false; who.setAttribute('aria-expanded', 'true');
+    who.setAttribute('aria-activedescendant', hi >= 0 ? 'opt-' + hi : '');
+    const el = hi >= 0 && $('opt-' + hi); if (el) el.scrollIntoView({ block: 'nearest' });
+  }
+  function openList(q) {
+    q = q.trim().toLowerCase();
+    shown = people.filter((p) => !q || label(p).toLowerCase().includes(q) || (p.username || '').toLowerCase().includes(q));
+    hi = q && shown.length ? 0 : -1;
+    drawList();
+  }
+  function closeList() { listEl.hidden = true; who.setAttribute('aria-expanded', 'false'); }
+  who.addEventListener('focus', () => { who.select(); openList(''); });
+  who.addEventListener('input', () => openList(who.value));
+  who.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault(); if (listEl.hidden) { openList(''); return; }
+      if (!shown.length) return;
+      hi = (hi + (e.key === 'ArrowDown' ? 1 : -1) + shown.length) % shown.length; drawList();
+    } else if (e.key === 'Enter') {
+      e.preventDefault(); if (!listEl.hidden && hi >= 0) { pick(shown[hi]); closeList(); who.blur(); }
+    } else if (e.key === 'Escape') closeList();
+  });
+  listEl.addEventListener('mousedown', (e) => { const li = e.target.closest('[data-i]'); e.preventDefault(); if (li) { pick(shown[+li.dataset.i]); closeList(); who.blur(); } });
+  who.addEventListener('blur', () => {
+    closeList();
+    const want = target ? label(target) : '', typed = who.value.trim(), off = !!typed && typed !== want;
+    $('who-hint').className = off ? 'err' : 'hint';
+    $('who-hint').textContent = off ? 'เลือกได้เฉพาะชื่อที่อยู่ใน LOGIN DATABASE ให้เลือกจากรายการ' : 'เลือกได้เฉพาะชื่อที่อยู่ใน LOGIN DATABASE วงเล็บท้ายชื่อคือตำแหน่งงาน';
+    who.value = want;
+  });
+
+  /* ---------- the form ---------- */
+  function buildRoles() {
+    const o = perm(target), cur = target.role || '';
+    let h = cur ? '' : '<option value="">เลือก Role</option>';
+    ['Admin', 'Editor', 'Viewer'].forEach((r) => {
+      const ok = r !== 'Admin' || o.admin || cur === 'Admin';
+      h += '<option value="' + r + '"' + (ok ? '' : ' disabled') + '>' + r + (ok ? '' : ' (ตั้งได้เฉพาะ ' + esc(mainAdmin) + ')') + '</option>';
+    });
+    $('role').innerHTML = h; $('role').value = cur;
+  }
+  function pick(t) {
+    target = t; mode = 'reset'; confirmSelf = false; done = ''; fail = '';
+    who.value = t ? label(t) : '';
+    if (t) { $('uname').value = t.username || ''; buildRoles(); setDP('end', t.end || ''); }
+    draw();
+  }
+  const uval = () => $('uname').value.trim().toLowerCase();
+  function userErr(u) {
+    if (!u) return 'กรอก Username ก่อน';
+    if (!USER_RE.test(u) || u === 'true' || u === 'false') return 'ใช้ตัวอักษรอังกฤษตัวเล็ก ตัวเลข จุด หรือขีดล่าง ยาว 3–30 ตัว และขึ้นต้นด้วยตัวอักษร';
+    const dup = people.find((p) => p !== target && (p.username || '').toLowerCase() === u);
+    return dup ? 'Username นี้ซ้ำกับ ' + full(dup) + ' ต้องใช้ชื่ออื่นก่อนจึงจะ Generate Link ได้' : '';
+  }
+  const curMode = () => (target.hasPw ? mode : 'create');
+  // why the button cannot be pressed now ('' when it can)
+  function problem() {
+    const t = target, o = perm(t), e = dp('end'), role = $('role').value;
+    if (o.why) return o.why;
+    if (o.end && e.partial) return 'เลือกวันสิ้นสุดการใช้งานให้ครบ วัน เดือน ปี หรือเว้นว่างทั้งหมด';
+    if (curMode() === 'role') return role === (t.role || '') && (!o.end || (e.iso === (t.end || '') && !t.endBad)) ? 'ยังไม่มีการเปลี่ยนแปลง' : '';
+    if (t.missing.length) return 'ข้อมูลในชีทยังไม่ครบ';
+    if (o.user) { const ue = userErr(uval()); if (ue) return ue.split(' ต้อง')[0]; }
+    else if (!t.username) return 'บัญชีนี้ยังไม่มี Username ต้องให้ ' + mainAdmin + ' กำหนดก่อน';
+    return role ? '' : 'เลือก Role ก่อน';
+  }
+  function rights() {
+    const t = target;
+    if (!t) {
+      $('rights-h').textContent = 'สิทธิ์ของบัญชี ' + me.username;
+      $('rights-body').innerHTML = me.isSuper
+        ? '<ul class="rules"><li>เปลี่ยน Role ของตัวเองไม่ได้</li><li>เปลี่ยน Role และ Reset Password ของทุกคนได้</li><li>แก้ Username ได้คนเดียว</li><li>ตั้งคนใหม่เป็น Admin ได้คนเดียว</li><li>ไม่มีวันสิ้นสุดการใช้งาน</li></ul>'
+        : '<ul class="rules"><li>เปลี่ยน Role และ Reset Password ของตัวเองได้</li><li>แก้ Username ของใครไม่ได้ รวมถึงของตัวเอง</li><li>แก้ไขบัญชี ' + esc(mainAdmin) + ' ไม่ได้ทุกกรณี</li><li>เปลี่ยน Role หรือ Reset Password ของ Admin คนอื่นไม่ได้</li><li>ให้สิทธิ์ได้เฉพาะ Editor และ Viewer</li></ul>';
+      return;
+    }
+    const o = perm(t), row = (text, ok) => '<li><span>' + text + '</span><span class="chip ' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'ได้' : 'ไม่ได้') + '</span></li>';
+    $('rights-h').textContent = t.isMe ? 'สิทธิ์ของคุณกับบัญชีตัวเอง' : 'สิทธิ์ของคุณกับบัญชีนี้';
+    $('rights-body').innerHTML = '<p class="hint"><span class="mono">' + esc(me.username) + '</span> กระทำต่อ <span class="mono">' + esc(t.username || '(ยังไม่มี Username)') + '</span></p><ul class="rights">'
+      + row(t.hasPw ? 'Reset Password' : 'สร้าง Password ครั้งแรก', o.link) + row('แก้ Username', o.user) + row('เปลี่ยน Role', o.role) + row('ตั้งเป็น Admin', o.admin) + row('กำหนดวันสิ้นสุดการใช้งาน', o.end) + '</ul>';
+  }
+  function linkbox() {
+    $('linkbox').hidden = !last; if (!last) return;
+    const left = last.expiresAt - now(), ok = left > 0;
+    $('lk-for').innerHTML = esc(last.name) + ' <span class="chip">' + (last.action === 'RESET' ? 'Reset Password' : 'สร้าง Password ครั้งแรก') + '</span> <span class="chip">' + esc(last.linkId) + '</span>';
+    $('lk-url').value = last.url;
+    $('lk-left').textContent = ok ? mmss(left) : '00:00';
+    $('lk-state').textContent = ok ? 'ใช้ได้ครั้งเดียว และหมดอายุเมื่อครบ ' + linkMinutes + ' นาที' : 'หมดอายุแล้ว';
+    $('lk-copy').disabled = !ok;
+  }
+  function draw() {
+    $('me-name').textContent = me.username; $('me-role').textContent = me.role;
+    $('selfc-main').textContent = mainAdmin;
+    rights(); linkbox();
+    const t = target;
+    $('after').hidden = !t; $('who-info').hidden = !t;
+    if (!t) return;
+    const o = perm(t), m = curMode(), over = !t.isSuper && (t.endBad || (!!t.end && today > t.end));
+    $('who-info').innerHTML = (t.group ? '<span class="chip">' + esc(t.group) + '</span>' : '')
+      + '<span class="chip ' + (t.role ? 'acc' : '') + '">Role: ' + esc(t.role || 'ยังไม่มี') + '</span>'
+      + '<span class="chip ' + (t.hasPw ? 'ok' : 'warn') + '">Password: ' + (t.hasPw ? 'ตั้งแล้ว' : 'ยังไม่ตั้ง') + '</span>'
+      + (t.isSuper ? '<span class="chip">ไม่มีวันสิ้นสุด</span>' : t.endBad ? '<span class="chip bad">วันสิ้นสุดในชีทอ่านไม่ได้</span>' : t.end ? '<span class="chip ' + (over ? 'bad' : '') + '">' + (over ? 'เลยวันสิ้นสุด ' : 'ใช้ได้ถึง ') + fmtD(t.end) + '</span>' : '<span class="chip">ไม่จำกัดเวลา</span>');
+    $('lock').hidden = !o.why; $('lock').textContent = o.why;
+    $('miss').hidden = !(t.missing.length && m !== 'role' && !o.why);
+    $('miss').textContent = 'ข้อมูลของคนนี้ในชีทยังไม่ครบ ขาด: ' + t.missing.join(', ') + ' กรอกในชีทให้ครบก่อนจึงจะ Generate Link ได้';
+    $('had').hidden = !t.hasPw || !!o.why;
+    $('m-reset').checked = mode === 'reset'; $('m-role').checked = mode === 'role'; $('m-role').disabled = !o.role;
+    const ro = m === 'role' || !o.user;
+    $('uname').readOnly = ro;
+    $('uname-hint').textContent = o.why ? '' : !o.user ? 'แก้ Username ได้เฉพาะ ' + mainAdmin : m === 'role' ? 'การเปลี่ยน Role ไม่แก้ Username' : 'แก้ไขได้ ระบบบันทึกทับ Username เดิมเมื่อกด Generate One Time Link';
+    const ue = ro ? '' : userErr(uval());
+    $('uname-err').hidden = !ue; $('uname-err').textContent = ue;
+    $('role').disabled = !o.role;
+    $('role-hint').textContent = o.why ? '' : !o.role ? me.username + ' เปลี่ยน Role ของตัวเองไม่ได้' : m === 'role' ? 'บันทึกทันที ไม่ต้องตั้ง Password ใหม่' : 'บันทึกเมื่อกด Generate One Time Link';
+    disableDP('end', !o.end);
+    $('end-hint').textContent = t.isSuper ? 'บัญชีนี้ไม่มีวันสิ้นสุดการใช้งาน' : 'เว้นว่างทั้งสามช่อง = ไม่จำกัด ใช้งานได้ถึงสิ้นวันที่ระบุ และ Login ไม่ได้ตั้งแต่วันถัดไป';
+    const p = problem();
+    $('go').disabled = !!p || busy;
+    $('go').textContent = busy ? 'กำลังบันทึก…' : m === 'role' ? 'บันทึก Role' : 'Generate One Time Link';
+    $('go-why').textContent = p && !o.why ? p : '';
+    $('selfc').hidden = !confirmSelf; $('actions').hidden = confirmSelf;
+    $('selfc-yes').disabled = busy; $('selfc-no').disabled = busy;
+    $('fail').hidden = !fail; $('fail').textContent = fail;
+    $('done').hidden = !done; $('done').textContent = done;
+  }
+  const touch = () => { confirmSelf = false; done = ''; fail = ''; draw(); };
+  ['uname', 'role'].forEach((id) => $(id).addEventListener('input', touch));
+  $('end').addEventListener('change', touch);
+  ['m-reset', 'm-role'].forEach((id) => $(id).addEventListener('change', () => { mode = $('m-role').checked ? 'role' : 'reset'; $('uname').value = target.username || ''; touch(); }));
+
+  async function commit() {
+    const t = target, o = perm(t), m = curMode(), role = $('role').value, end = o.end ? dp('end').iso : '';
+    busy = true; fail = ''; done = ''; draw();
+    let text = '';
+    try {
+      if (m === 'role') {
+        const r = await api('admin.role', { ref: t.ref, role, end });
+        text = 'บันทึกแล้ว ' + full(t) + ' มี Role ' + r.role + (r.end !== (t.end || '') ? ' · วันสิ้นสุดการใช้งาน: ' + (r.end ? fmtD(r.end) : 'ไม่จำกัด') : '');
+      } else {
+        const r = await api('admin.link', { ref: t.ref, username: uval(), role, end });
+        const u = new URL('set-password.html', location.href); u.search = ''; u.hash = 'token=' + r.token;
+        last = { url: u.href, linkId: r.linkId, expiresAt: r.expiresAt, action: r.action, name: full(t) };
+        text = 'สร้าง One Time Link แล้ว ส่งลิงก์ให้ ' + full(t) + ' ภายใน ' + linkMinutes + ' นาที';
+      }
+    } catch (er) { busy = false; confirmSelf = false; fail = er.message || 'บันทึกไม่สำเร็จ ลองอีกครั้ง'; draw(); if (er.code === 'stale') load(t.ref); return; }
+    busy = false; confirmSelf = false;
+    await load(t.ref);
+    done = text; draw();
+  }
+  $('grant').addEventListener('submit', (e) => {
+    e.preventDefault(); if (!target || busy || problem()) return;
+    if (target.isMe && target.role === 'Admin' && $('role').value !== 'Admin') { confirmSelf = true; draw(); return; }
+    commit();
+  });
+  $('selfc-yes').addEventListener('click', () => { if (!busy) commit(); });
+  $('selfc-no').addEventListener('click', () => { confirmSelf = false; $('role').value = target.role; draw(); });
+  $('lk-copy').addEventListener('click', () => {
+    const inp = $('lk-url'), btn = $('lk-copy'), back = (t, ms) => { btn.textContent = t; setTimeout(() => { btn.textContent = 'คัดลอกลิงก์'; }, ms); };
+    const byHand = () => { inp.focus(); inp.select(); back('เลือกไว้แล้ว กด Ctrl+C', 2600); };
+    try { navigator.clipboard.writeText(inp.value).then(() => back('คัดลอกแล้ว', 1800), byHand); } catch (e) { byHand(); }
+  });
+  $('out').addEventListener('click', () => signOut(''));
+  $('retry').addEventListener('click', () => load(target && target.ref));
+
+  /* ---------- reading the list from the back end ---------- */
+  async function load(keepRef) {
+    let r;
+    try { r = await api('admin.list'); }
+    catch (er) {
+      $('wait').hidden = true; $('bench').hidden = true; $('denied').hidden = false;
+      $('denied-t').textContent = er.code === 'forbidden' ? 'บัญชีของคุณไม่มี Role Admin จึงเข้าหน้านี้ไม่ได้' : (er.message || 'โหลดรายชื่อไม่สำเร็จ');
+      $('retry').hidden = er.code === 'forbidden';
+      return;
+    }
+    people = r.people; me = r.me; mainAdmin = r.mainAdmin; today = r.today;
+    App.setUser(r.me, r.expiresAt);
+    $('wait').hidden = true; $('denied').hidden = true; $('bench').hidden = false;
+    pick(keepRef ? people.find((p) => p.ref === keepRef) || null : null);
+  }
+  api('info').then((i) => { linkMinutes = i.linkMinutes; }, () => {});
+  load();
+  setInterval(() => { if (last) linkbox(); }, 1000);
+})();
+</script>
+</body>
+</html>
