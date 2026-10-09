@@ -26,6 +26,7 @@
   </section>
 
   <p class="note bad" id="flash" role="alert" hidden></p>
+  <p class="note warn" id="overlap" role="status" hidden></p>
 
   <form class="panel" id="login" novalidate>
     <h2>เข้าสู่ระบบ</h2>
@@ -39,6 +40,15 @@
     <p class="hint" id="hours" hidden></p>
     <p class="hint">ลืมรหัสผ่าน หรือยังไม่มีบัญชี ให้ติดต่อผู้ดูแลระบบของฝูง</p>
   </form>
+
+  <section class="panel" id="waiting" aria-labelledby="wt-h" hidden>
+    <div>
+      <h2 id="wt-h">กำลังรอเครื่องเดิมออกจากระบบ</h2>
+      <p>บัญชี <span class="mono" id="wt-user"></span> กำลังถูกใช้งานที่เครื่องอื่น เครื่องนี้จะเข้าใช้งานได้เมื่อเครื่องเดิมออกจากระบบ</p>
+    </div>
+    <p class="timer"><span id="wt-left"></span><small>ระบบแจ้งเครื่องเดิมแล้ว ถ้าเครื่องเดิมกดไม่อนุญาต เครื่องนี้จะเข้าใช้งานไม่ได้</small></p>
+    <div class="actions"><button type="button" class="btn" id="wt-cancel">ยกเลิก</button></div>
+  </section>
 
   <section class="panel" id="inside" aria-labelledby="in-h" hidden>
     <div>
@@ -70,12 +80,14 @@
 <script>
 (() => {
   'use strict';
-  const { $, esc, api, session, signIn, setUser, signOut, flash, fmtT, beYear, years, buildDP, dp, setDP } = App;
+  const { $, esc, api, session, signIn, signOut, farewell, giveUp, flash, watch, fmtT, beYear, years, buildDP, dp, setDP } = App;
   buildDP('birth', years(beYear() - 17, beYear() - 90));
+  let waiting = null;                                              // { ticket, username, timer }: this device waits for the one in use (ข้อ 1.12.2)
 
+  // ข้อ 1.11.1: with an account signed in, the page says which one and shows no login form
   function show() {
     const s = session();
-    $('login').hidden = !!s; $('inside').hidden = !s;
+    $('login').hidden = !!s || !!waiting; $('waiting').hidden = !!s || !waiting; $('inside').hidden = !s;
     if (!s) return;
     const u = s.user;
     $('in-name').textContent = (u.rank ? u.rank + ' ' : '') + u.name + ' (' + u.pos + ')';
@@ -84,30 +96,71 @@
     $('to-admin').hidden = u.role !== 'Admin';
   }
   const say = (t) => { $('msg').hidden = !t; $('msg').textContent = t || ''; };
+  const tell = (id, t) => { $(id).hidden = !t; $(id).textContent = t || ''; };
+  function stopWaiting(tell) { if (waiting) { clearTimeout(waiting.timer); if (tell) giveUp(waiting.ticket); } waiting = null; }
+  function entered(r) {
+    const old = session();
+    stopWaiting();
+    // ข้อ 1.11.2: another account was signed in in this browser meanwhile: the later login is the one that stays
+    if (old && old.user.username !== r.user.username) { farewell(old.token); tell('overlap', 'ตรวจพบการเข้าสู่ระบบซ้อนกันในเบราว์เซอร์นี้ บัญชี ' + old.user.username + ' ถูกออกจากระบบแล้ว ทุกแท็บใช้บัญชี ' + r.user.username); }
+    signIn(r);
+    $('pw').value = ''; $('card').value = ''; setDP('birth', ''); $('flash').hidden = true; say('');
+    show();
+  }
+  // this device asks again until it is let in, turned away, or the wait is called off
+  function waitTurn() {
+    const w = waiting; if (!w) return;
+    api('login.wait', { ticket: w.ticket }).then((r) => {
+      if (waiting !== w) return;
+      if (r.session) { entered(r); return; }
+      $('wt-left').textContent = 'รออีกไม่เกิน ' + r.left + ' วินาที';
+      w.timer = setTimeout(waitTurn, w.pollMs);
+    }, (er) => {
+      if (waiting !== w) return;
+      if (er.code === 'offline' || er.code === 'busy' || er.code === 'server_error') { w.timer = setTimeout(waitTurn, w.pollMs); return; }     // the back end was busy: ask again
+      stopWaiting(); show(); say(er.message || 'เข้าสู่ระบบไม่สำเร็จ ลองอีกครั้ง');
+    });
+  }
 
   $('login').addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = $('user').value.trim(), password = $('pw').value, idGov = $('card').value.trim(), birth = dp('birth');
     if (!username || !password || !idGov || !birth.iso) { say('กรอกให้ครบทุกช่อง รวมทั้งวัน เดือน และปีเกิด'); return; }
-    say(''); $('flash').hidden = true;
+    say(''); $('flash').hidden = true; tell('overlap', '');
     $('go').disabled = true; $('go').textContent = 'กำลังตรวจสอบ…';
     try {
-      signIn(await api('login', { username, password, idGov, birth: birth.iso }));
-      $('pw').value = ''; $('card').value = ''; setDP('birth', '');
-      show();
+      const r = await api('login', { username, password, idGov, birth: birth.iso });
+      if (r.wait) {
+        waiting = { ticket: r.ticket, username: r.username, pollMs: r.pollMs || 2500, timer: 0 };
+        $('pw').value = ''; $('wt-user').textContent = r.username; $('wt-left').textContent = 'กำลังรอ…';
+        show(); waiting.timer = setTimeout(waitTurn, 600);
+      } else entered(r);
     } catch (er) { say(er.message || 'เข้าสู่ระบบไม่สำเร็จ ลองอีกครั้ง'); }
     finally { $('go').disabled = false; $('go').textContent = 'เข้าสู่ระบบ'; }
   });
+  $('wt-cancel').addEventListener('click', () => { stopWaiting(true); show(); say('ยกเลิกการรอแล้ว'); });
+  window.addEventListener('pagehide', () => { if (waiting) giveUp(waiting.ticket); });
   $('out').addEventListener('click', () => signOut(''));
 
   const note = flash();
   if (!App.hasBackend) { $('flash').hidden = false; $('flash').textContent = 'ยังไม่ได้ใส่ที่อยู่ระบบหลังบ้านในไฟล์ assets/config.js หน้านี้จึงยังใช้งานไม่ได้'; $('go').disabled = true; }
-  else if (note) { $('flash').hidden = false; $('flash').textContent = note; }
+  else if (note && !session()) tell('flash', note);
   show();
+  let lastUser = session() ? session().user.username : '';
+  // the login of this browser changed in another tab: this tab follows (ข้อ 1.11.2, 1.11.3)
+  watch((s, was) => {
+    if (s) {
+      const before = was && lastUser && lastUser !== s.user.username ? lastUser : '';
+      stopWaiting(true); $('flash').hidden = true; say('');             // another tab of this browser got in: this one stops asking
+      if (before) tell('overlap', 'ตรวจพบการเข้าสู่ระบบซ้อนกันในเบราว์เซอร์นี้ บัญชี ' + before + ' ถูกออกจากระบบแล้ว ทุกแท็บใช้บัญชี ' + s.user.username);
+    } else if (was) tell('flash', flash());
+    lastUser = s ? s.user.username : '';
+    show();
+  });
   if (App.hasBackend) {
-    api('info').then((i) => { $('hours').hidden = false; $('hours').textContent = 'เข้าสู่ระบบหนึ่งครั้งใช้งานได้ ' + i.sessionHours + ' ชั่วโมง แล้วต้องเข้าสู่ระบบใหม่'; }, () => {});
-    // already signed in from this tab: ask the back end again, the Role may have changed
-    if (session()) api('me').then((r) => { setUser(r.user, r.expiresAt); show(); }, () => {});
+    api('info').then((i) => { const m = i.sessionMinutes; $('hours').hidden = false; $('hours').textContent = 'เข้าสู่ระบบหนึ่งครั้งใช้งานได้ ' + (m % 60 ? m + ' นาที' : (m / 60) + ' ชั่วโมง') + ' แล้วต้องเข้าสู่ระบบใหม่'; }, () => {});
+    // already signed in in this browser: ask the back end again, the Role may have changed
+    if (session()) api('me').then((r) => { App.setUser(r.user, r.expiresAt); show(); }, () => {});
   }
 })();
 </script>

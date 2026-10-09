@@ -103,3 +103,11 @@ tbody tr:last-child td { border-bottom: 0; }
 .matrix .on { background: var(--accent-soft); font-weight: 700; }
 .yes { color: var(--ok); font-weight: 600; }
 .no2 { color: var(--muted); }
+
+/* ข้อความที่ app.js แสดงบนทุกหน้าที่ Login อยู่: ใกล้หมดเวลา, มีเครื่องอื่น Login ซ้อน */
+#app-bar { position: sticky; top: 0; z-index: 20; max-width: 1120px; margin-inline: auto; padding-inline: 16px; display: flex; flex-direction: column; }
+#app-bar > :not([hidden]) { margin-top: 8px; box-shadow: 0 2px 6px rgb(0 0 0 / .18); }
+#app-take { border-width: 2px; font-weight: 600; }
+#app-take b { font-variant-numeric: tabular-nums; font-size: 1.15em; }
+.events { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; }
+

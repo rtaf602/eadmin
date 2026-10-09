@@ -5,13 +5,15 @@
 | ที่อยู่ | คืออะไร |
 |---|---|
 | `docs/index.html` | หน้าเข้าสู่ระบบ |
-| `docs/admin.html` | หน้า Admin: สร้าง Password ครั้งแรก, Reset Password, เปลี่ยน Role, กำหนดวันสิ้นสุดการใช้งาน |
+| `docs/admin.html` | หน้า Admin: สร้าง Password ครั้งแรก, Reset Password, เปลี่ยน Role, เปลี่ยน Username, กำหนดวันสิ้นสุดการใช้งาน |
 | `docs/set-password.html` | หน้าที่ผู้ใช้ตั้ง Password ของตัวเองจาก One Time Link |
 | `docs/assets/config.js` | ที่อยู่ระบบหลังบ้าน (ใส่ตอนติดตั้ง) |
-| `backend/Code.gs` | ระบบหลังบ้านบน Google Apps Script อ่านและเขียน Google Sheet ในนามเจ้าของสคริปต์ |
+| `backend/Code.gs` | ระบบหลังบ้านบน Google Apps Script อ่านและเขียน Google Sheet ในนามเจ้าของสคริปต์ รวมการ Backup และการตั้ง Protect sheet ของไฟล์ Backup |
 | `test/` | ชุดทดสอบที่รันกับตัวจำลองของ Google |
 
-หน้าเว็บอยู่บน GitHub Pages (โฟลเดอร์ `docs/`) ข้อมูลอยู่ใน Google Sheet สองไฟล์: LOGIN DATABASE และ BACKLOG
+หน้าเว็บอยู่บน GitHub Pages (โฟลเดอร์ `docs/`) ข้อมูลอยู่ใน Google Sheet สี่ไฟล์: LOGIN DATABASE และ BACKLOG กับไฟล์ Backup ของแต่ละไฟล์
+
+กติกาหลัก: Login หนึ่งครั้งใช้ได้ 1 ชั่วโมง หนึ่งเบราว์เซอร์ Login ได้หนึ่งบัญชี หนึ่งบัญชีใช้ได้คราวละหนึ่งเครื่อง และทุกครั้งที่ระบบบันทึก ข้อมูลถูกคัดลอกไปไฟล์ Backup ที่ตั้ง Protect sheet ไว้
 
 **ขั้นตอนติดตั้งอยู่ใน [`SETUP_TH.md`](SETUP_TH.md)**
 
@@ -19,7 +21,7 @@
 
 1. **เว็บบน GitHub Pages เป็นสาธารณะ** ทุกคนที่มีลิงก์เปิดหน้าเว็บได้ สิ่งที่กันคนนอกคือการ Login ซึ่งตรวจที่ระบบหลังบ้าน
 2. ไฟล์ใน repo นี้ไม่มีลิงก์ Google Sheet ชื่อคน Username หรือรหัสผ่าน ค่าเหล่านี้กรอกในหน้า Apps Script ตอนติดตั้ง และ **ห้ามนำขึ้น repo**
-3. Google Sheet ทั้งสองไฟล์ต้องตั้ง Share เป็น Restricted
+3. Google Sheet ทุกไฟล์ต้องตั้ง Share เป็น Restricted ไฟล์ Backup เป็นของบัญชี Google ที่แยกไว้ และระบบหลังบ้านติดตั้งด้วยบัญชีนั้น
 4. ระบบหลังบ้านทดสอบกับตัวจำลองของ Google แล้ว แต่ยังไม่เคยรันบน Google จริง ให้ทดลองตามคู่มือก่อนใช้งานจริง
 
 ## สำหรับผู้พัฒนา

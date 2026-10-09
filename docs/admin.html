@@ -14,7 +14,7 @@
     <div>
       <p class="unit">ฝูง.602 บน.6 · สถานภาพอากาศยาน</p>
       <h1>ให้สิทธิ์ผู้ใช้งาน</h1>
-      <p class="sub">สร้าง Password ครั้งแรก, Reset Password และเปลี่ยน Role</p>
+      <p class="sub">สร้าง Password ครั้งแรก, Reset Password, เปลี่ยน Role และเปลี่ยน Username</p>
     </div>
     <div class="who">
       <span class="chip" id="me-name"></span>
@@ -28,6 +28,15 @@
   <div class="note bad" id="denied" role="alert" hidden>
     <p id="denied-t"></p>
     <div class="actions"><a class="btn small" href="index.html">กลับหน้าแรก</a><button type="button" class="btn small" id="retry" hidden>ลองอีกครั้ง</button></div>
+  </div>
+
+  <!-- ข้อ 1.13.7: what happened to the backup files, shown to every administrator until the main one acknowledges -->
+  <div class="note warn" id="bk" role="status" hidden>
+    <p><b class="t">เหตุการณ์ของไฟล์ Backup ที่ยังไม่ได้รับทราบ</b></p>
+    <ul class="events" id="bk-list"></ul>
+    <p>ระบบยังทำงานตามปกติ ให้ตรวจไฟล์ Backup และตรวจว่ามีผู้ใดเข้าบัญชี Google ที่เป็นเจ้าของไฟล์ Backup</p>
+    <div class="actions"><button type="button" class="btn" id="bk-ok">รับทราบ</button><span class="hint" id="bk-why"></span></div>
+    <p class="err" id="bk-err" role="alert" hidden></p>
   </div>
 
   <div class="bench" id="bench" hidden>
@@ -56,9 +65,20 @@
 
         <fieldset class="step">
           <legend><span class="no">1.2</span><label for="uname">Username</label></legend>
-          <input type="text" id="uname" class="mono" spellcheck="false" autocapitalize="off">
+          <div class="linkrow">
+            <input type="text" id="uname" class="mono" spellcheck="false" autocapitalize="off">
+            <button type="button" class="btn" id="uname-go" hidden>เปลี่ยน Username</button>
+          </div>
           <p class="hint" id="uname-hint"></p>
           <p class="err" id="uname-err" role="alert" hidden></p>
+          <div class="note warn" id="uname-c" hidden>
+            <p id="uname-c-t"></p>
+            <div class="actions">
+              <button type="button" class="btn primary" id="uname-yes">ยืนยัน</button>
+              <button type="button" class="btn" id="uname-no">ยกเลิก</button>
+            </div>
+          </div>
+          <p class="note ok" id="uname-done" role="status" hidden></p>
         </fieldset>
 
         <fieldset class="step">
@@ -116,11 +136,13 @@
 <script>
 (() => {
   'use strict';
-  const { $, esc, api, session, signOut, now, fmtD, mmss, beYear, years, buildDP, dp, setDP, disableDP } = App;
+  const { $, esc, api, session, signOut, watch, now, fmtD, fmtDT, mmss, beYear, years, buildDP, dp, setDP, disableDP } = App;
   if (!session()) { location.replace('index.html'); return; }
   const USER_RE = /^[a-z][a-z0-9_.]{2,29}$/;
-  let people = [], me = null, mainAdmin = '', today = '', linkMinutes = 30;
+  let people = [], me = null, mainAdmin = '', today = '', linkMinutes = 30, backup = [], bkBusy = false, bkErr = '';
   let target = null, mode = 'reset', confirmSelf = false, done = '', fail = '', busy = false, last = null;
+  let confirmUser = false, userDone = '', userFail = '';                 // the separate "เปลี่ยน Username" action
+  const mine = session().token;
   buildDP('end', years(beYear(), beYear() + 10));
   const full = (p) => (p.rank ? p.rank + ' ' : '') + p.name, label = (p) => full(p) + ' (' + p.pos + ')';
 
@@ -185,7 +207,7 @@
     $('role').innerHTML = h; $('role').value = cur;
   }
   function pick(t) {
-    target = t; mode = 'reset'; confirmSelf = false; done = ''; fail = '';
+    target = t; mode = 'reset'; confirmSelf = false; done = ''; fail = ''; confirmUser = false; userDone = ''; userFail = '';
     who.value = t ? label(t) : '';
     if (t) { $('uname').value = t.username || ''; buildRoles(); setDP('end', t.end || ''); }
     draw();
@@ -195,18 +217,21 @@
     if (!u) return 'กรอก Username ก่อน';
     if (!USER_RE.test(u) || u === 'true' || u === 'false') return 'ใช้ตัวอักษรอังกฤษตัวเล็ก ตัวเลข จุด หรือขีดล่าง ยาว 3–30 ตัว และขึ้นต้นด้วยตัวอักษร';
     const dup = people.find((p) => p !== target && (p.username || '').toLowerCase() === u);
-    return dup ? 'Username นี้ซ้ำกับ ' + full(dup) + ' ต้องใช้ชื่ออื่นก่อนจึงจะ Generate Link ได้' : '';
+    return dup ? 'Username นี้ซ้ำกับ ' + full(dup) + ' ต้องใช้ชื่ออื่น' : '';
   }
+  // the Username in the box differs from the one saved in the sheet (only the main administrator can make it so)
+  const renamed = () => perm(target).user && uval() !== (target.username || '').toLowerCase();
   const curMode = () => (target.hasPw ? mode : 'create');
   // why the button cannot be pressed now ('' when it can)
   function problem() {
     const t = target, o = perm(t), e = dp('end'), role = $('role').value;
     if (o.why) return o.why;
     if (o.end && e.partial) return 'เลือกวันสิ้นสุดการใช้งานให้ครบ วัน เดือน ปี หรือเว้นว่างทั้งหมด';
+    if (renamed()) return 'กด "' + (t.username ? 'เปลี่ยน Username' : 'บันทึก Username') + '" เพื่อบันทึก Username ก่อน';
     if (curMode() === 'role') return role === (t.role || '') && (!o.end || (e.iso === (t.end || '') && !t.endBad)) ? 'ยังไม่มีการเปลี่ยนแปลง' : '';
     if (t.missing.length) return 'ข้อมูลในชีทยังไม่ครบ';
-    if (o.user) { const ue = userErr(uval()); if (ue) return ue.split(' ต้อง')[0]; }
-    else if (!t.username) return 'บัญชีนี้ยังไม่มี Username ต้องให้ ' + mainAdmin + ' กำหนดก่อน';
+    if (!t.username) return o.user ? 'บันทึก Username ก่อน' : 'บัญชีนี้ยังไม่มี Username ต้องให้ ' + mainAdmin + ' กำหนดก่อน';
+    if (people.some((p) => p !== t && (p.username || '').toLowerCase() === t.username.toLowerCase())) return 'Username นี้ซ้ำกับคนอื่นในชีท';
     return role ? '' : 'เลือก Role ก่อน';
   }
   function rights() {
@@ -214,14 +239,14 @@
     if (!t) {
       $('rights-h').textContent = 'สิทธิ์ของบัญชี ' + me.username;
       $('rights-body').innerHTML = me.isSuper
-        ? '<ul class="rules"><li>เปลี่ยน Role ของตัวเองไม่ได้</li><li>เปลี่ยน Role และ Reset Password ของทุกคนได้</li><li>แก้ Username ได้คนเดียว</li><li>ตั้งคนใหม่เป็น Admin ได้คนเดียว</li><li>ไม่มีวันสิ้นสุดการใช้งาน</li></ul>'
-        : '<ul class="rules"><li>เปลี่ยน Role และ Reset Password ของตัวเองได้</li><li>แก้ Username ของใครไม่ได้ รวมถึงของตัวเอง</li><li>แก้ไขบัญชี ' + esc(mainAdmin) + ' ไม่ได้ทุกกรณี</li><li>เปลี่ยน Role หรือ Reset Password ของ Admin คนอื่นไม่ได้</li><li>ให้สิทธิ์ได้เฉพาะ Editor และ Viewer</li></ul>';
+        ? '<ul class="rules"><li>เปลี่ยน Role ของตัวเองไม่ได้</li><li>เปลี่ยน Role และ Reset Password ของทุกคนได้</li><li>เปลี่ยน Username ได้คนเดียว</li><li>ตั้งคนใหม่เป็น Admin ได้คนเดียว</li><li>ไม่มีวันสิ้นสุดการใช้งาน</li></ul>'
+        : '<ul class="rules"><li>เปลี่ยน Role และ Reset Password ของตัวเองได้</li><li>เปลี่ยน Username ของใครไม่ได้ รวมถึงของตัวเอง</li><li>แก้ไขบัญชี ' + esc(mainAdmin) + ' ไม่ได้ทุกกรณี</li><li>เปลี่ยน Role หรือ Reset Password ของ Admin คนอื่นไม่ได้</li><li>ให้สิทธิ์ได้เฉพาะ Editor และ Viewer</li></ul>';
       return;
     }
     const o = perm(t), row = (text, ok) => '<li><span>' + text + '</span><span class="chip ' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'ได้' : 'ไม่ได้') + '</span></li>';
     $('rights-h').textContent = t.isMe ? 'สิทธิ์ของคุณกับบัญชีตัวเอง' : 'สิทธิ์ของคุณกับบัญชีนี้';
     $('rights-body').innerHTML = '<p class="hint"><span class="mono">' + esc(me.username) + '</span> กระทำต่อ <span class="mono">' + esc(t.username || '(ยังไม่มี Username)') + '</span></p><ul class="rights">'
-      + row(t.hasPw ? 'Reset Password' : 'สร้าง Password ครั้งแรก', o.link) + row('แก้ Username', o.user) + row('เปลี่ยน Role', o.role) + row('ตั้งเป็น Admin', o.admin) + row('กำหนดวันสิ้นสุดการใช้งาน', o.end) + '</ul>';
+      + row(t.hasPw ? 'Reset Password' : 'สร้าง Password ครั้งแรก', o.link) + row('เปลี่ยน Username', o.user) + row('เปลี่ยน Role', o.role) + row('ตั้งเป็น Admin', o.admin) + row('กำหนดวันสิ้นสุดการใช้งาน', o.end) + '</ul>';
   }
   function linkbox() {
     $('linkbox').hidden = !last; if (!last) return;
@@ -232,8 +257,16 @@
     $('lk-state').textContent = ok ? 'ใช้ได้ครั้งเดียว และหมดอายุเมื่อครบ ' + linkMinutes + ' นาที' : 'หมดอายุแล้ว';
     $('lk-copy').disabled = !ok;
   }
+  function drawBackup() {
+    $('bk').hidden = !backup.length;
+    $('bk-list').innerHTML = backup.map((e) => '<li><span class="mono">' + esc(fmtDT(e.at)) + '</span> ' + esc(e.text) + '</li>').join('');
+    $('bk-ok').hidden = !me.isSuper; $('bk-ok').disabled = bkBusy; $('bk-ok').textContent = bkBusy ? 'กำลังบันทึก…' : 'รับทราบ';
+    $('bk-why').textContent = me.isSuper ? '' : 'รับทราบได้เฉพาะ ' + mainAdmin;
+    $('bk-err').hidden = !bkErr; $('bk-err').textContent = bkErr;
+  }
   function draw() {
     $('me-name').textContent = me.username; $('me-role').textContent = me.role;
+    drawBackup();
     $('selfc-main').textContent = mainAdmin;
     rights(); linkbox();
     const t = target;
@@ -249,18 +282,26 @@
     $('miss').textContent = 'ข้อมูลของคนนี้ในชีทยังไม่ครบ ขาด: ' + t.missing.join(', ') + ' กรอกในชีทให้ครบก่อนจึงจะ Generate Link ได้';
     $('had').hidden = !t.hasPw || !!o.why;
     $('m-reset').checked = mode === 'reset'; $('m-role').checked = mode === 'role'; $('m-role').disabled = !o.role;
-    const ro = m === 'role' || !o.user;
-    $('uname').readOnly = ro;
-    $('uname-hint').textContent = o.why ? '' : !o.user ? 'แก้ Username ได้เฉพาะ ' + mainAdmin : m === 'role' ? 'การเปลี่ยน Role ไม่แก้ Username' : 'แก้ไขได้ ระบบบันทึกทับ Username เดิมเมื่อกด Generate One Time Link';
-    const ue = ro ? '' : userErr(uval());
+    const edited = renamed(), ue = userFail || (edited ? userErr(uval()) : '');
+    $('uname').readOnly = !o.user || confirmUser || busy;
+    $('uname-go').hidden = !o.user;
+    $('uname-go').textContent = t.username ? 'เปลี่ยน Username' : 'บันทึก Username';
+    $('uname-go').disabled = !edited || !!userErr(uval()) || confirmUser || busy;
+    $('uname-hint').textContent = o.why ? '' : !o.user ? 'เปลี่ยน Username ได้เฉพาะ ' + mainAdmin : 'ปุ่ม' + (t.username ? 'เปลี่ยน' : 'บันทึก') + ' Username บันทึกทันที แยกจากการ Generate One Time Link และไม่เปลี่ยน Password';
     $('uname-err').hidden = !ue; $('uname-err').textContent = ue;
-    $('role').disabled = !o.role;
+    $('uname-c').hidden = !confirmUser;
+    $('uname-c-t').textContent = t.username
+      ? 'ต้องการเปลี่ยน Username จาก ' + t.username + ' เป็น ' + uval() + ' หรือไม่ หลังเปลี่ยนแล้วให้แจ้งเจ้าของบัญชีว่าต้อง Login ด้วย Username ใหม่'
+      : 'ต้องการกำหนด Username เป็น ' + uval() + ' หรือไม่';
+    $('uname-yes').disabled = busy; $('uname-no').disabled = busy; $('uname-yes').textContent = busy && confirmUser ? 'กำลังบันทึก…' : 'ยืนยัน';
+    $('uname-done').hidden = !userDone; $('uname-done').textContent = userDone;
     $('role-hint').textContent = o.why ? '' : !o.role ? me.username + ' เปลี่ยน Role ของตัวเองไม่ได้' : m === 'role' ? 'บันทึกทันที ไม่ต้องตั้ง Password ใหม่' : 'บันทึกเมื่อกด Generate One Time Link';
+    $('role').disabled = !o.role || busy;
     disableDP('end', !o.end);
     $('end-hint').textContent = t.isSuper ? 'บัญชีนี้ไม่มีวันสิ้นสุดการใช้งาน' : 'เว้นว่างทั้งสามช่อง = ไม่จำกัด ใช้งานได้ถึงสิ้นวันที่ระบุ และ Login ไม่ได้ตั้งแต่วันถัดไป';
     const p = problem();
     $('go').disabled = !!p || busy;
-    $('go').textContent = busy ? 'กำลังบันทึก…' : m === 'role' ? 'บันทึก Role' : 'Generate One Time Link';
+    $('go').textContent = busy && !confirmUser ? 'กำลังบันทึก…' : m === 'role' ? 'บันทึก Role' : 'Generate One Time Link';
     $('go-why').textContent = p && !o.why ? p : '';
     $('selfc').hidden = !confirmSelf; $('actions').hidden = confirmSelf;
     $('selfc-yes').disabled = busy; $('selfc-no').disabled = busy;
@@ -268,9 +309,26 @@
     $('done').hidden = !done; $('done').textContent = done;
   }
   const touch = () => { confirmSelf = false; done = ''; fail = ''; draw(); };
-  ['uname', 'role'].forEach((id) => $(id).addEventListener('input', touch));
+  $('role').addEventListener('input', touch);
   $('end').addEventListener('change', touch);
-  ['m-reset', 'm-role'].forEach((id) => $(id).addEventListener('change', () => { mode = $('m-role').checked ? 'role' : 'reset'; $('uname').value = target.username || ''; touch(); }));
+  ['m-reset', 'm-role'].forEach((id) => $(id).addEventListener('change', () => { mode = $('m-role').checked ? 'role' : 'reset'; touch(); }));
+
+  /* ---------- เปลี่ยน Username: its own button, asked about first, saved at once, no link ---------- */
+  $('uname').addEventListener('input', () => { confirmUser = false; userDone = ''; userFail = ''; touch(); });
+  $('uname-go').addEventListener('click', () => { if (!target || busy || !renamed() || userErr(uval())) return; confirmUser = true; userDone = ''; userFail = ''; done = ''; fail = ''; draw(); });
+  $('uname-no').addEventListener('click', () => { confirmUser = false; draw(); });
+  $('uname-yes').addEventListener('click', async () => {
+    if (!target || busy || !confirmUser) return;
+    const t = target, old = t.username;
+    busy = true; draw();
+    try {
+      const r = await api('admin.username', { ref: t.ref, username: uval() });
+      busy = false;
+      await load(t.ref);
+      userDone = 'เปลี่ยน Username สำเร็จ' + (old ? ': ' + old + ' เป็น ' + r.username : ': ' + r.username);
+      draw();
+    } catch (er) { busy = false; confirmUser = false; userFail = er.message || 'บันทึกไม่สำเร็จ ลองอีกครั้ง'; draw(); if (er.code === 'stale') load(t.ref); }
+  });
 
   async function commit() {
     const t = target, o = perm(t), m = curMode(), role = $('role').value, end = o.end ? dp('end').iso : '';
@@ -281,7 +339,7 @@
         const r = await api('admin.role', { ref: t.ref, role, end });
         text = 'บันทึกแล้ว ' + full(t) + ' มี Role ' + r.role + (r.end !== (t.end || '') ? ' · วันสิ้นสุดการใช้งาน: ' + (r.end ? fmtD(r.end) : 'ไม่จำกัด') : '');
       } else {
-        const r = await api('admin.link', { ref: t.ref, username: uval(), role, end });
+        const r = await api('admin.link', { ref: t.ref, role, end });
         const u = new URL('set-password.html', location.href); u.search = ''; u.hash = 'token=' + r.token;
         last = { url: u.href, linkId: r.linkId, expiresAt: r.expiresAt, action: r.action, name: full(t) };
         text = 'สร้าง One Time Link แล้ว ส่งลิงก์ให้ ' + full(t) + ' ภายใน ' + linkMinutes + ' นาที';
@@ -305,23 +363,31 @@
   });
   $('out').addEventListener('click', () => signOut(''));
   $('retry').addEventListener('click', () => load(target && target.ref));
+  $('bk-ok').addEventListener('click', async () => {
+    if (bkBusy || !me || !me.isSuper) return;
+    bkBusy = true; bkErr = ''; drawBackup();
+    try { await api('admin.backupAck'); bkBusy = false; await load(target && target.ref); }
+    catch (er) { bkBusy = false; bkErr = er.code === 'no_change' ? '' : (er.message || 'บันทึกไม่สำเร็จ ลองอีกครั้ง'); if (er.code === 'no_change') await load(target && target.ref); else drawBackup(); }
+  });
 
   /* ---------- reading the list from the back end ---------- */
   async function load(keepRef) {
     let r;
     try { r = await api('admin.list'); }
     catch (er) {
-      $('wait').hidden = true; $('bench').hidden = true; $('denied').hidden = false;
+      $('wait').hidden = true; $('bench').hidden = true; $('bk').hidden = true; $('denied').hidden = false;
       $('denied-t').textContent = er.code === 'forbidden' ? 'บัญชีของคุณไม่มี Role Admin จึงเข้าหน้านี้ไม่ได้' : (er.message || 'โหลดรายชื่อไม่สำเร็จ');
       $('retry').hidden = er.code === 'forbidden';
       return;
     }
-    people = r.people; me = r.me; mainAdmin = r.mainAdmin; today = r.today;
+    people = r.people; me = r.me; mainAdmin = r.mainAdmin; today = r.today; backup = r.backupEvents || [];
     App.setUser(r.me, r.expiresAt);
     $('wait').hidden = true; $('denied').hidden = true; $('bench').hidden = false;
     pick(keepRef ? people.find((p) => p.ref === keepRef) || null : null);
   }
   api('info').then((i) => { linkMinutes = i.linkMinutes; }, () => {});
+  // this browser holds one account: when another tab signs out, or signs in as someone else, this page follows
+  watch((s) => { if (!s) location.replace('index.html'); else if (s.token !== mine) location.reload(); });
   load();
   setInterval(() => { if (last) linkbox(); }, 1000);
 })();
