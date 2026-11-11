@@ -460,6 +460,20 @@ check('1.14.4.3 a Role still written as Editor: read as User, and left as it is 
 sim.setup({});
 check('…setup lists the rows that still have the old Role names', sim.logs.some((l) => /ยังเป็น Editor หรือ Viewer.*: \d+/.test(l)));
 rowOf(sim, 'thana_t').cells[10] = 'User';
+// from the independent review
+rowOf(sim, 'thana_t').cells[10] = '';
+Wa = login('weera_t', PW.weera, 6).session;
+check('1.14.4.5 another admin cannot give a Role back to an account whose Role was taken off (not through CHANGE ROLE, not through a link)', code(role(Wa, 'thana_t', { role: 'User' })) === 'forbidden' && code(link(Wa, 'thana_t', { role: 'User' })) === 'forbidden' && cell('thana_t', 10) === '');
+check('…the main admin can', role(S, 'thana_t', { role: 'User' }).ok && cell('thana_t', 10) === 'User');
+check('another admin\'s Admin page receives none of his own webs either', !('webs' in list(Wa).me) && Array.isArray(me(Wa).user.webs));
+wl(S, { act: 'close', code: 'REPORT' });
+const sSom2 = login('somchai_t', 'Backup-Check-Pass-10', 9).session;
+check('a closed web asked for by someone without access: the same answer as for a web that is not there', code(enter(sSom2, 'REPORT')) === 'no_web' && code(enter(sSom2, 'NOPE')) === 'no_web' && code(enter(S, 'REPORT')) === 'web_closed');
+wl(S, { act: 'open', code: 'REPORT' });
+const wlRows = sim.sheet(DB, 'WEB LIST'), stateAt = wlRows.findIndex((r) => r[0] === 'REPORT');
+wlRows[stateAt][3] = '';
+check('a web whose state cell was emptied by hand counts as closed', code(enter(S, 'REPORT')) === 'web_closed');
+wlRows[stateAt][3] = 'เปิด';
 check('the web calls that write are refused without a session before anything is read', ['admin.web', 'admin.webList'].every((op) => code(post(op, {})) === 'auth'));
 
 /* ---------- what is left in the sheets ---------- */

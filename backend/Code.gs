@@ -450,7 +450,7 @@ function webs_(ctx) {
     const code = str_(r[0]).toUpperCase();
     if (!WEB_CODE_RE.test(code) || seen[code]) return;                        // a row without a proper code, or a code twice: the first one counts
     seen[code] = true;
-    list.push({ row: i + 2, code: code, name: str_(r[1]) || code, link: str_(r[2]), open: str_(r[3]) !== WEB_SHUT });
+    list.push({ row: i + 2, code: code, name: str_(r[1]) || code, link: str_(r[2]), open: str_(r[3]) === WEB_OPEN });   // anything but "เปิด" is closed
   });
   ctx.webs = { sh: sh, list: list };
   return ctx.webs;
@@ -466,10 +466,9 @@ function myWebs_(ctx, p) {
 // Role in that web. Refused unless the web is open and the account has access to it (ข้อ 1.14.3.1, 1.14.3.5).
 function webAuth_(ctx, req, code) {
   const p = auth_(ctx, req), w = webOf_(ctx, code);
-  if (!w) throw err_('no_web', MSG.noWeb);
+  const role = w ? webRole_(ctx, p, w.code) : '';
+  if (!role) throw err_('no_web', MSG.noWeb);                         // unknown, or no access: one answer, so codes cannot be guessed
   if (!w.open) throw err_('web_closed', MSG.webShut);
-  const role = webRole_(ctx, p, w.code);
-  if (!role) throw err_('no_web', MSG.noWeb);
   return { p: p, web: w, role: role };
 }
 // setup(): the column of web access, added at the end of the header row (and of every repeated header row) when it
@@ -786,7 +785,7 @@ function opLogout_(ctx, req) {
 function opAdminList_(ctx, req) {
   const a = admin_(ctx, req), sup = isSuper_(ctx, a);
   return {
-    me: user_(ctx, a), mainAdmin: superName_(ctx), today: today_(), expiresAt: ctx.exp,
+    me: sup ? user_(ctx, a) : Object.assign(user_(ctx, a), { webs: undefined }), mainAdmin: superName_(ctx), today: today_(), expiresAt: ctx.exp,
     // ข้อ 1.14.2.4.1: the list of webs and everyone's web access go to the main administrator only
     webs: sup ? webs_(ctx).list.map(function (w) { return { code: w.code, name: w.name, link: w.link, open: w.open }; }) : undefined,
     webColumn: sup ? db_(ctx).col.web >= 0 : undefined,
@@ -818,6 +817,9 @@ function roleFor_(ctx, t, o, want) {
   const role = OPT.roles.indexOf(String(want)) >= 0 ? String(want) : '';
   if (!role) throw err_('bad_role', 'เลือก Role ก่อน');
   if (role === 'Admin' && t.role !== 'Admin' && !o.admin) throw err_('forbidden', 'ตั้งเป็น Admin ได้เฉพาะ ' + superName_(ctx));
+  // ข้อ 1.14.4.5: another administrator gives User to an account that has no Role yet (a new one), and may lower his
+  // own Role; any other change of Role is the main administrator's
+  if (role !== t.role && !o.roleSwap && !(!t.role && !t.hash && role === 'User')) throw err_('forbidden', 'เปลี่ยน Role ได้เฉพาะ ' + superName_(ctx));
   return role;
 }
 function endFor_(t, o, want) {

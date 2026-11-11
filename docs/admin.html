@@ -291,16 +291,18 @@
     } catch (er) { busy = false; webBusy = false; webFail = er.message || 'บันทึกไม่สำเร็จ ลองอีกครั้ง'; draw(); if (er.code === 'stale') load(t.ref); }
   });
   /* ---------- ข้อ 1.14.7: the list of webs ---------- */
+  let wlDrawn = '';
   function drawWL() {
     $('wl').hidden = !webs;
     if (!webs) return;
     $('wl-nocol').hidden = webColumn;
-    $('wl-rows').innerHTML = webs.length ? webs.map((w) => '<tr><td class="m">' + esc(w.code) + '</td>'
+    const sig = JSON.stringify(webs);                     // rebuilt only when the list itself changed, so typing is not lost
+    if (sig !== wlDrawn) { wlDrawn = sig; $('wl-rows').innerHTML = webs.length ? webs.map((w) => '<tr><td class="m">' + esc(w.code) + '</td>'
       + '<td><input type="text" data-wl-name="' + esc(w.code) + '" value="' + esc(w.name) + '" aria-label="ชื่อเว็บ ' + esc(w.code) + '" maxlength="100"></td>'
       + '<td><input type="text" class="mono" data-wl-link="' + esc(w.code) + '" value="' + esc(w.link) + '" aria-label="ลิงก์ ' + esc(w.code) + '" spellcheck="false"></td>'
       + '<td><span class="chip ' + (w.open ? 'ok' : 'warn') + '">' + (w.open ? 'เปิด' : 'ปิด') + '</span></td>'
       + '<td><span class="actions"><button type="button" class="btn small" data-wl-save="' + esc(w.code) + '">บันทึก</button><button type="button" class="btn small ghost" data-wl-toggle="' + esc(w.code) + '">' + (w.open ? 'ปิดเว็บ' : 'เปิดเว็บ') + '</button></span></td></tr>').join('')
-      : '<tr><td colspan="5" class="hint">ยังไม่มีเว็บ</td></tr>';
+      : '<tr><td colspan="5" class="hint">ยังไม่มีเว็บ</td></tr>'; }
     document.querySelectorAll('#wl button, #wl input').forEach((x) => { x.disabled = busy; });
     $('wl-fail').hidden = !wlFail; $('wl-fail').textContent = wlFail;
     $('wl-done').hidden = !wlDone; $('wl-done').textContent = wlDone;
