@@ -13,7 +13,7 @@
   <header class="mast">
     <div>
       <p class="unit">ฝูง.602 บน.6</p>
-      <h1 class="brand">E ADMIN SITE <span>SQUADRON 602</span></h1>
+      <h1 class="brand" id="brand">E ADMIN SITE <span>SQUADRON 602</span></h1>
     </div>
   </header>
 
@@ -93,6 +93,8 @@
   let waiting = null;
   // came here from a page of another web (?next=): back there once this browser has a login
   const back = App.next();
+  // came from a page of another web: this page is its login page, not the way into E ADMIN
+  if (back) { $('brand').firstChild.textContent = 'LOGIN PAGE '; document.title = 'LOGIN PAGE · SQUADRON 602'; }
   const goBack = () => { if (back && session()) { location.replace(back); return true; } return false; };                                              // { ticket, username, timer }: this device waits for the one in use (ข้อ 1.12.2)
 
   // ข้อ 1.11.1: with an account signed in, the page says which one and shows no login form

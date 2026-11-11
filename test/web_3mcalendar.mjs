@@ -216,6 +216,7 @@ const A = await device('editor');
 await A.page.goto(ORIGIN + '/3mcalendar/');
 await A.page.waitForURL(/\/eadmin\/index\.html\?next=/);
 check('no login: the calendar sends the browser to the login page, with the way back', A.page.url() === ORIGIN + '/eadmin/index.html?next=%2F3mcalendar%2F', A.page.url());
+check('…the login page reached from a web is titled LOGIN PAGE, not E ADMIN SITE', /^LOGIN PAGE\s+SQUADRON 602$/.test((await A.page.innerText('#brand')).trim()) && (await A.page.title()) === 'LOGIN PAGE · SQUADRON 602', await A.page.innerText('#brand'));
 await signIn(A.page, 'thana_t', PW.thana, 3);
 await A.page.waitForURL(ORIGIN + '/3mcalendar/');
 await A.page.waitForSelector('#editBtn', { timeout: 15000 });
@@ -291,6 +292,8 @@ await X.page.goto(ORIGIN + '/eadmin/index.html?next=' + encodeURIComponent('//ev
 await signIn(X.page, 'chan_t', PW.chan, 8);
 await X.page.waitForSelector('#inside:not([hidden])', { timeout: 15000 });
 check('?next= that points away from this site is ignored', X.page.url().startsWith(ORIGIN + '/eadmin/'));
+await X.page.goto(ORIGIN + '/eadmin/index.html');
+check('the login page opened by itself is titled E ADMIN SITE', /^E ADMIN SITE/.test((await X.page.innerText('#brand')).trim()));
 
 const sessionsSeen = await Promise.all([A, V, N, X].map((d) => d.page.evaluate(() => (JSON.parse(localStorage.getItem('eadmin602:session') || 'null') || {}).token || '').catch(() => '')));
 check('the pages never sent a session to the calendar back end, only passes', calBodies.length > 5 && calBodies.every((b) => /"pass":"[^"]{40,}"/.test(b)) && calBodies.every((b) => !/"session"/.test(b)) && !sessionsSeen.filter(Boolean).some((t) => calBodies.some((b) => b.includes(t))), calBodies.length);
