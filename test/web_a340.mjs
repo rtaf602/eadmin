@@ -124,7 +124,8 @@ const log = () => tabs[LOG].rows.slice(1).filter((r) => r && r[0]);
 check('Editor SAVE: written to the map, the history carries the name from the login, not the one the page sends', sv.ok && sv.saved === 1 && tabs[MAP].rows[17][2] === 'ใช้ไม่ได้' && log().filter((r) => r[3] === '51A').every((r) => r[2] === 'ธนา ทดลองกิจ') && !J(tabs[LOG].rows).includes('ชื่อปลอม') && sv.lastSave.by === 'ธนา ทดลองกิจ', [sv, log().slice(-2)]);
 check('Editor cannot clear all data (Admin of this web only)', ce(cpost({ action: 'reset', pass: T })) === 'forbidden');
 const ex = cpost({ action: 'exported', pass: T, kind: 'EXPORT PDF SUMMARY 4 PAGES', filename: 'x.pdf' });
-check('an export: a line in the history with the account name', ex.ok && J(log().slice(-1)[0].slice(1)) === J(['หน้าเว็บ', 'ธนา ทดลองกิจ', 'EXPORT', 'EXPORT PDF SUMMARY 4 PAGES', '', 'x.pdf']));
+const exl = () => (tabs['ประวัติการส่งออก'] ? tabs['ประวัติการส่งออก'].rows.slice(1).filter((r) => r && r[0]) : []);
+check('an export: a line in its own tab ประวัติการส่งออก (made on the first export), not in ประวัติการแก้ไข', ex.ok && J(tabs['ประวัติการส่งออก'].rows[0]) === J(['เวลา', 'ชื่อ-สกุล', 'Username', 'Role', 'ชนิดไฟล์', 'ชื่อไฟล์']) && J(exl().slice(-1)[0].slice(1)) === J(['ธนา ทดลองกิจ', 'thana_t', 'Editor', 'EXPORT PDF SUMMARY 4 PAGES', 'x.pdf']) && !J(tabs[LOG].rows).includes('x.pdf'), exl());
 check('…an unknown kind of export is refused', ce(cpost({ action: 'exported', pass: T, kind: 'anything' })) === 'bad_request');
 const passS = passOf(S), lS = cpost({ action: 'load', pass: passS });
 check('Admin of this web (the main admin): may clear all data', lS.resetEnabled === true && cpost({ action: 'reset', pass: passS }).ok && tabs[MAP].rows[17][2] === 'ปกติ' && log().slice(-1)[0][2] === 'ชาญ ตัวอย่างหลัก');
@@ -180,9 +181,9 @@ check('SAVE from the page: no PIN asked, written, in the history under the accou
 await A.page.screenshot({ path: path.join(OUT, '1-editor.png') });
 // ExcelJS comes from a CDN this test cannot reach: a stand-in that answers anything, so the page goes through
 await A.page.route(/cdnjs\.cloudflare\.com\/ajax\/libs\/exceljs/, (r) => r.fulfill({ contentType: 'text/javascript', body: `(function(){var mk=function(){return new Proxy(function(){},{get:function(t,k){if(k==='then')return undefined;if(k==='writeBuffer')return function(){return Promise.resolve(new ArrayBuffer(8))};if(k===Symbol.toPrimitive)return function(){return 0};if(k===Symbol.iterator)return function*(){};return mk()},apply:function(){return mk()},construct:function(){return mk()},set:function(){return true}})};window.ExcelJS={Workbook:mk()}})();` }));
-const n0 = log().length;
+const n0 = exl().length, nLog0 = log().length;
 const dl = A.page.waitForEvent('download'); await A.page.click('#bXls'); await dl; await A.page.waitForTimeout(1200);
-check('EXPORT TO EXCEL on the page: the file, and a line in the history with the account name', log().length === n0 + 1 && log().slice(-1)[0][4] === 'EXPORT TO EXCEL' && log().slice(-1)[0][2] === 'ธนา ทดลองกิจ' && /\.xlsx$/.test(log().slice(-1)[0][6]), log().slice(-1));
+check('EXPORT TO EXCEL on the page: the file, and a line in ประวัติการส่งออก with the account', exl().length === n0 + 1 && log().length === nLog0 && exl().slice(-1)[0][4] === 'EXPORT TO EXCEL' && exl().slice(-1)[0][1] === 'ธนา ทดลองกิจ' && /\.xlsx$/.test(exl().slice(-1)[0][5]), exl().slice(-1));
 check('Editor: no button to clear all data', await A.page.isHidden('#foot'));
 
 const V = await device('viewer');
