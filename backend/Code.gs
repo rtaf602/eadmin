@@ -248,7 +248,7 @@ function asError_(x) {
 const OPS = {
   'info': opInfo_, 'login': opLogin_, 'login.wait': opLoginWait_, 'login.cancel': opLoginCancel_, 'me': opMe_, 'ping': opPing_, 'session.deny': opDeny_, 'logout': opLogout_,
   'link.info': opLinkInfo_, 'link.use': opLinkUse_,
-  'web.enter': opWebEnter_,
+  'web.enter': opWebEnter_, 'web.check': opWebCheck_,
   'admin.list': opAdminList_, 'admin.link': opAdminLink_, 'admin.role': opAdminRole_, 'admin.username': opAdminUsername_, 'admin.backupAck': opBackupAck_,
   'admin.web': opAdminWeb_, 'admin.webList': opAdminWebList_,
 };
@@ -464,8 +464,10 @@ function myWebs_(ctx, p) {
 }
 // For a page of a web, and for every request of a web that reads or writes its data: who is asking, and with which
 // Role in that web. Refused unless the web is open and the account has access to it (ข้อ 1.14.3.1, 1.14.3.5).
-function webAuth_(ctx, req, code) {
-  const p = auth_(ctx, req), w = webOf_(ctx, code);
+// s: the session itself, already opened (see opWebCheck_); otherwise it is read from req
+// quiet: asked by the back end of that web, not by the page itself (see opWebCheck_)
+function webAuth_(ctx, req, code, quiet, s) {
+  const p = s ? who_(ctx, s, quiet) : auth_(ctx, req, quiet), w = webOf_(ctx, code);
   const role = w ? webRole_(ctx, p, w.code) : '';
   if (!role) throw err_('no_web', MSG.noWeb);                         // unknown, or no access: one answer, so codes cannot be guessed
   if (!w.open) throw err_('web_closed', MSG.webShut);
@@ -517,12 +519,13 @@ function token_(ctx, req) {
   if (!(+s.e > ctx.now)) throw err_('auth', MSG.timeout);
   return s;
 }
-function auth_(ctx, req) {
-  const s = token_(ctx, req), p = byKey_(ctx, String(s.i));
+function auth_(ctx, req, quiet) { return who_(ctx, token_(ctx, req), quiet); }
+function who_(ctx, s, quiet) {
+  const p = byKey_(ctx, String(s.i));
   if (!p || !canLogin_(p)) throw err_('auth', MSG.auth);
   if (!same_(pwMark_(ctx, p), s.p)) throw err_('auth', MSG.pwChanged);              // ข้อ 1.9
   if (over_(ctx, p)) throw err_('expired', MSG.expired);
-  device_(ctx, s);                                                                  // ข้อ 1.12
+  device_(ctx, s, quiet);                                                           // ข้อ 1.12
   ctx.exp = +s.e;
   return p;
 }
@@ -587,7 +590,10 @@ function devSync_(ctx, k, fn, alive) {
 }
 // Is this login still the one in use? Called on every request that carries a session. Notes that the device is alive,
 // and puts into ctx.take the request it has to be told about.
-function device_(ctx, s) {
+// quiet: the question comes from the back end of another web, not from the device. The answer is the same, but nothing
+// is noted: the device is not marked as just seen, and a waiting request is not marked as told (the countdown of
+// ข้อ 1.12.1 starts only when the page itself has been told).
+function device_(ctx, s, quiet) {
   const k = String(s.i), read = devRead_(ctx, k), before = JSON.stringify(read || null);
   let st = devSettle_(ctx, k, read);
   if (JSON.stringify(st) !== before) st = devSync_(ctx, k, function (x) { return { st: x }; }).st;      // time moved something on: write it down
@@ -596,6 +602,7 @@ function device_(ctx, s) {
     if (st && st.s) throw err_('taken', MSG.taken);
     throw err_('auth', MSG.auth);
   }
+  if (quiet) return;
   CacheService.getScriptCache().put('ds:' + k, String(ctx.now), 3600);
   if (!st.q) return;
   if (!st.q.seen) st = devSync_(ctx, k, function (x) { if (x && x.s === s.s && x.q && !x.q.seen) x.q.seen = ctx.now; return { st: x }; }).st;
@@ -945,10 +952,27 @@ function opAdminWebList_(ctx, req) {
   return { webs: webs_(ctx).list.map(function (x) { return { code: x.code, name: x.name, link: x.link, open: x.open }; }) };
 }
 
-// A page of a web asks: may this account use web `web`, and as what? (ข้อ 1.14.3). Answers who it is and the Role.
+// A page of a web asks: may this account use web `web`, and as what? (ข้อ 1.14.3). Answers who it is and the Role,
+// and a pass for that web: what the page sends to the back end of that web instead of its session (see opWebCheck_).
 function opWebEnter_(ctx, req) {
-  const r = webAuth_(ctx, req, req.web);
-  return { user: user_(ctx, r.p), expiresAt: ctx.exp, web: { code: r.web.code, name: r.web.name, link: r.web.link, role: r.role } };
+  const r = webAuth_(ctx, req, req.web), s = token_(ctx, req);
+  const pass = seal_(ctx, 'webpass', { i: s.i, e: s.e, p: s.p, s: s.s, w: r.web.code });
+  return { user: user_(ctx, r.p), expiresAt: ctx.exp, web: { code: r.web.code, name: r.web.name, link: r.web.link, role: r.role }, pass: pass };
+}
+
+// The back end of a web asks, for a request it has received with a pass: may it go on, and as whom (ข้อ 1.14.3.5)?
+// The page of that web gets the pass from web.enter and sends it, never its session, to its own back end, which sends it
+// here with the code of its web. A pass is good for this question about that one web only: not as a session (another
+// signature), not for another web, and not past the login it came from (same hour, same password, same device).
+// So whoever can change the script of a web cannot use what it receives for the Admin page or for another web.
+// The answer carries no ID number and no list of the person's other webs.
+function opWebCheck_(ctx, req) {
+  const w = open_(ctx, 'webpass', req && req.pass), code = str_(req && req.web).toUpperCase();
+  if (!w || !w.i || !w.s || !code || w.w !== code) throw err_('auth', MSG.auth);
+  if (!(+w.e > ctx.now)) throw err_('auth', MSG.timeout);
+  const r = webAuth_(ctx, req, code, true, { i: w.i, e: w.e, p: w.p, s: w.s });
+  ctx.exp = +w.e;
+  return { user: { rank: r.p.rank, name: r.p.name, pos: r.p.pos, username: r.p.username }, role: r.role, web: { code: r.web.code, name: r.web.name }, expiresAt: ctx.exp };
 }
 
 function opLinkInfo_(ctx, req) {

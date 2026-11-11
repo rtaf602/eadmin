@@ -1,4 +1,4 @@
-// ใช้ร่วมกันทั้งสามหน้า: การเรียกระบบหลังบ้าน การจำว่าเข้าสู่ระบบอยู่ การเฝ้าดูการ Login ที่ค้างอยู่ และตัวเลือกวันที่แบบ พ.ศ.
+// ใช้ร่วมกันทั้งสามหน้า และหน้าของเว็บอื่นที่ใช้ระบบ Login นี้ (เช่น 3mcalendar): การเรียกระบบหลังบ้าน การจำว่าเข้าสู่ระบบอยู่ การเฝ้าดูการ Login ที่ค้างอยู่ และตัวเลือกวันที่แบบ พ.ศ.
 // หน้าเว็บนี้ไม่ตัดสินสิทธิ์เอง ทุกคำขอถูกตรวจซ้ำที่ระบบหลังบ้าน (backend/Code.gs)
 window.App = (() => {
   'use strict';
@@ -12,6 +12,12 @@ window.App = (() => {
     kept: 'คุณไม่อนุญาตการ Login จากเครื่องอื่น และใช้งานต่อได้ หากไม่ใช่คุณที่ Login ให้ติดต่อ Admin เพื่อ Reset Password',
   };
   const $ = (id) => document.getElementById(id);
+  // The login page sits next to this file's folder. A page of another web loads this file from here
+  // (/eadmin/assets/app.js), so the way back to the login page is worked out from where this file came from.
+  const HOME = (() => { try { return new URL('../', document.currentScript.src).href; } catch (e) { return new URL('./', location.href).href; } })();
+  const foreign = location.href.indexOf(HOME) !== 0;                                     // a page of another web
+  // the login page; from another web it carries the way back (path only, same site), used after the next login
+  function loginUrl() { return HOME + 'index.html' + (foreign ? '?next=' + encodeURIComponent(location.pathname) : ''); }
   const esc = (s) => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   /* ---------- the session: one for the whole browser (ข้อ 1.11) ----------
@@ -50,7 +56,7 @@ window.App = (() => {
     if (s && tell) farewell(s.token);
     box.del(KEY); box.del(TAKE);
     if (message) box.set(FLASH, JSON.stringify({ m: message, t: Date.now() })); else box.del(FLASH);
-    location.replace('index.html');
+    location.replace(loginUrl());
   }
   const signOut = (message) => leave(message || '', true);
 
@@ -85,9 +91,16 @@ window.App = (() => {
      Every second: is the hour nearly over, or over; is it time to ask the back end again; is another device waiting.
      The tabs of one browser share the asking: whichever tab is due first asks, the others see the result. */
   let cfg = { pollMs: 10000, warnMs: 300000 }, onChange = null, mine = '', asking = false, asked = 0, verdict = false, verdictAt = 0, refusing = false, note = '', noteUntil = 0;
+  // a page of another web does not load app.css: the notices bring their own look
+  const BAR_CSS = '#app-bar{position:sticky;top:0;z-index:2147483000;max-width:1120px;margin-inline:auto;padding-inline:16px;display:flex;flex-direction:column;font:15px/1.5 system-ui,sans-serif}'
+    + '#app-bar>:not([hidden]){margin-top:8px;box-shadow:0 2px 6px rgb(0 0 0/.18)}#app-bar [hidden]{display:none!important}'
+    + '#app-bar .note{margin:8px 0 0;padding:10px 14px;border:1px solid #888;background:#f6f6f6;color:#111;display:flex;flex-direction:column;gap:8px}'
+    + '#app-bar .note.ok{border-color:#1e7a3c;background:#e8f5ec}#app-bar .note.warn{border-color:#a86400;background:#fff4dc}#app-bar .note.bad{border-color:#b3261e;background:#fdecea}'
+    + '#app-bar .note p{margin:0}#app-bar .btn{font:inherit;font-weight:700;border:1px solid #111;background:#fff;color:#111;padding:6px 14px;border-radius:3px;cursor:pointer}#app-bar .btn:disabled{color:#888;border-color:#bbb;cursor:not-allowed}';
   function bar() {
     let el = $('app-bar');
     if (!el) {
+      if (foreign && !$('app-bar-css')) { const st = document.createElement('style'); st.id = 'app-bar-css'; st.textContent = BAR_CSS; document.head.appendChild(st); }
       el = document.createElement('div'); el.id = 'app-bar';
       el.innerHTML = '<p class="note warn" id="app-warn" role="status" hidden></p>'
         + '<div class="note bad" id="app-take" role="alert" hidden><p id="app-take-t"></p><div class="actions"><button type="button" class="btn" id="app-deny">ไม่อนุญาต ฉันกำลังใช้งานอยู่</button></div></div>'
@@ -191,6 +204,13 @@ window.App = (() => {
      Showing or hiding buttons by that Role is only a convenience: every request of the web that reads or writes data
      has to be checked again by the back end with webAuth_(). */
   const enterWeb = (code) => api('web.enter', { web: code });
+  // a page of another web without a login in this browser: to the login page, and back here after it
+  const toLogin = () => location.replace(loginUrl());
+  // the way back after a login, from ?next= : a path of this same site, nothing else
+  function next() {
+    const v = new URLSearchParams(location.search).get('next') || '';
+    return /^\/(?!\/)[A-Za-z0-9._~%\-\/]{0,200}$/.test(v) && v.indexOf('..') < 0 ? location.origin + v : '';
+  }
 
-  return { $, esc, api, session, signIn, setUser, signOut, farewell, giveUp, flash, watch, now, fmtD, fmtT, fmtDT, mmss, beYear, years, buildDP, dp, setDP, disableDP, enterWeb, hasBackend: !!BACKEND };
+  return { $, esc, api, session, signIn, setUser, signOut, farewell, giveUp, flash, watch, now, fmtD, fmtT, fmtDT, mmss, beYear, years, buildDP, dp, setDP, disableDP, enterWeb, toLogin, next, loginUrl, hasBackend: !!BACKEND };
 })();
