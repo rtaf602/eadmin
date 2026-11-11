@@ -95,7 +95,7 @@
 - เว็บเปิดเฉพาะเมื่อช่องสถานะเป็น `เปิด` พอดี ช่องว่างหรือข้อความอื่นถือว่าปิด; คนที่ไม่มีสิทธิ์ถามเว็บที่ปิดได้คำตอบเดียวกับเว็บที่ไม่มีอยู่ (เดารหัสไม่ได้)
 - Admin คนอื่นให้ Role `User` ได้เฉพาะบัญชีใหม่ที่ยังไม่มี Role และยังไม่เคยตั้ง Password; บัญชีที่ถูกลบ Role ออกต้องให้ Admin หลักคืนให้
 - รหัสเว็บ: อังกฤษตัวใหญ่ ตัวเลข ขีดล่าง 2–20 ตัว ขึ้นต้นด้วยตัวอักษร ลิงก์ต้องเป็น https:// ชื่อเว็บห้ามขึ้นต้นด้วย = + - @
-- **การต่อเว็บอื่นเข้ากับระบบนี้** (ทำแล้ว: 3mcalendar `WEB1`, a340_seatplan `WEB2`, a319_seatplan `WEB3` แต่ละ repo มี `CLAUDE.md` บอกส่วนที่ห้ามถอด):
+- **การต่อเว็บอื่นเข้ากับระบบนี้** (ทำแล้ว: 3mcalendar `WEB1`, a340_seatplan `WEB2`, a319_seatplan `WEB5` แต่ละ repo มี `CLAUDE.md` บอกส่วนที่ห้ามถอด):
   หน้าของเว็บนั้นโหลด `/eadmin/assets/config.js` และ `/eadmin/assets/app.js` (GitHub Pages เดียวกัน `localStorage` จึงใช้ร่วมกัน) เรียก `App.watch()` และ `App.enterWeb(code)` (op `web.enter`)
   `web.enter` ตอบ Role และ **pass** (ลายมือชื่อชนิด `webpass` ผูกกับ session และรหัสเว็บ) หน้าเว็บส่ง pass (ไม่ใช่ session) ไประบบหลังบ้านของเว็บนั้น
   ระบบหลังบ้านของเว็บนั้นถาม `web.check` `{ pass, web }` ด้วย `UrlFetchApp` ได้ `{ user: {rank,name,pos,username}, role, web, expiresAt }`
