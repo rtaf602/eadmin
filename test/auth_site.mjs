@@ -18,6 +18,7 @@ const PW = { chan: 'Main-Admin-Pass-01', weera: 'Second-Admin-02', phum: 'Viewer
 const KEY = 'eadmin602:session', stored = (d) => d.page.evaluate((k) => localStorage.getItem(k), KEY);
 const cell = (key, col) => rowOf(sim, key).cells[col];
 const log = () => sim.sheet(LOG).slice(1);
+const J = (v) => JSON.stringify(v);
 
 const browser = await chromium.launch();
 const errors = [], seen = [], outside = [];
@@ -78,7 +79,7 @@ check('login with a wrong year of birth: the same message', /ข้อมูล�
 await A.page.goto(sim.siteUrl); await A.page.click('#go');
 check('login with empty fields is stopped in the page', /กรอกให้ครบ/.test(await A.page.innerText('#msg')));
 check('login as the main administrator', (await A.login('chan_t', PW.chan, 8)) === 'in');
-check('after login: name, Role, the Admin column marked, the way to the Admin page', /ชาญ ตัวอย่างหลัก/.test(await A.page.innerText('#in-name')) && /Role: Admin/.test(await A.page.innerText('#in-chips')) && (await A.page.locator('#matrix th.on').innerText()) === 'Admin' && (await A.page.isVisible('#to-admin')));
+check('after login: name, Role, no web yet, the way to the Admin page', /ชาญ ตัวอย่างหลัก/.test(await A.page.innerText('#in-name')) && /Role ของบัญชี: Admin หลัก/.test(await A.page.innerText('#in-chips')) && (await A.page.isVisible('#in-noweb')) && (await A.page.isVisible('#to-admin')));
 check('the login page says how long a session lasts (ข้อ 1.10)', /ใช้งานได้ 1 ชั่วโมง/.test(await A.page.goto(sim.siteUrl).then(() => A.page.waitForSelector('#hours:not([hidden])', { state: 'attached' })).then(() => A.page.evaluate(() => document.getElementById('hours').textContent))));
 check('the login is kept for the whole browser, not for one tab, and the password fields are emptied', (await A.page.evaluate(() => Object.keys(sessionStorage).join() + '|' + Object.keys(localStorage).filter((k) => /session/.test(k)).join())) === '|eadmin602:session' && (await A.page.inputValue('#pw')) === '');
 check('signed in: the page says which account and shows no login form (ข้อ 1.11.1)', (await A.page.isHidden('#login')) && (await A.page.isVisible('#inside')) && /chan_t/.test(await A.page.innerText('#in-chips')) && (await A.page.isVisible('#out')));
@@ -94,17 +95,17 @@ check('a name that is not in the list cannot be chosen', (await A.page.inputValu
 await A.pick('ภูมิ');
 check('choosing a name: its group, Role and password state; the form for a first password', /นักบิน A319 \/ A320/.test(await A.page.innerText('#who-info')) && /ยังไม่ตั้ง/.test(await A.page.innerText('#who-info')) && (await A.page.isHidden('#had')) && (await A.page.inputValue('#uname')) === 'phum_s' && (await A.page.isDisabled('#go')) && (await A.page.innerText('#go-why')) === 'เลือก Role ก่อน');
 check('the main administrator has a button of his own for the Username, with nothing to save yet', (await A.page.isVisible('#uname-go')) && (await A.page.isDisabled('#uname-go')) && (await A.page.innerText('#uname-go')) === 'เปลี่ยน Username' && /แยกจากการ Generate One Time Link/.test(await A.page.innerText('#uname-hint')));
-await A.page.selectOption('#role', 'Viewer'); await A.save();
+await A.page.selectOption('#role', 'User'); await A.save();
 const url = await A.page.inputValue('#lk-url');
 check('Generate One Time Link: the link, its countdown and the copy button', /^http:\/\/127\.0\.0\.1:\d+\/set-password\.html#token=[A-Za-z0-9_-]{40,}$/.test(url) && /^(29|30):\d\d$/.test(await A.page.innerText('#lk-left')) && (await A.page.isEnabled('#lk-copy')) && /ส่งลิงก์ให้ น\.ต\. ภูมิ สาธิตพงศ์ ภายใน 30 นาที/.test(await A.page.innerText('#done')), [url, await A.page.innerText('#lk-left')]);
-check('…the Role is in the sheet, and the form still shows the same person', cell('phum_s', 10) === 'Viewer' && (await A.page.inputValue('#who')) === 'น.ต. ภูมิ สาธิตพงศ์ (นบ.)' && /Role: Viewer/.test(await A.page.innerText('#who-info')));
+check('…the Role is in the sheet, and the form still shows the same person', cell('phum_s', 10) === 'User' && (await A.page.inputValue('#who')) === 'น.ต. ภูมิ สาธิตพงศ์ (นบ.)' && /Role: User/.test(await A.page.innerText('#who-info')));
 await A.page.screenshot({ path: path.join(OUT, 'admin-link.png'), fullPage: true });
 await A.pick('เมธี');
 check('a row with missing data: named, and no link', /BIRTH DATE/.test(await A.page.innerText('#miss')) && (await A.page.isDisabled('#go')));
 /* ---------- เปลี่ยน Username: its own button (ข้อ 1.2.1) ---------- */
 await A.pick('ประเสริฐ'); await A.page.fill('#uname', 'thana_t');
 check('a Username that someone else has: warned, nothing can be saved and no link made', /ซ้ำกับ น\.อ\. ธนา ทดลองกิจ/.test(await A.page.innerText('#uname-err')) && (await A.page.isDisabled('#uname-go')) && (await A.page.isDisabled('#go')));
-await A.page.fill('#uname', 'prasert_new'); await A.page.selectOption('#role', 'Editor');
+await A.page.fill('#uname', 'prasert_new'); await A.page.selectOption('#role', 'User');
 check('a Username that was typed but not saved blocks Generate One Time Link (ข้อ 1.2.1.3)', (await A.page.isEnabled('#uname-go')) && (await A.page.isDisabled('#go')) && /กด "เปลี่ยน Username"/.test(await A.page.innerText('#go-why')), await A.page.innerText('#go-why'));
 await A.page.click('#uname-go');
 check('the question on the administrator\'s screen names the old and the new, with ยืนยัน and ยกเลิก', (await A.page.innerText('#uname-c-t')) === 'ต้องการเปลี่ยน Username จาก prasert_j เป็น prasert_new หรือไม่ หลังเปลี่ยนแล้วให้แจ้งเจ้าของบัญชีว่าต้อง Login ด้วย Username ใหม่' && (await A.page.innerText('#uname-yes')) === 'ยืนยัน' && (await A.page.innerText('#uname-no')) === 'ยกเลิก', await A.page.innerText('#uname-c-t'));
@@ -114,15 +115,15 @@ const linksBefore = sim.sheet(DB, 'LINK TOKEN').length;
 await A.page.click('#uname-go'); await A.page.click('#uname-yes'); await A.page.waitForSelector('#uname-done:not([hidden])');
 check('ยืนยัน: saved at once with "เปลี่ยน Username สำเร็จ", and no link is made', /^เปลี่ยน Username สำเร็จ/.test(await A.page.innerText('#uname-done')) && cell('prasert_new', 11) === 'prasert_new' && sim.sheet(DB, 'LINK TOKEN').length === linksBefore && (await A.page.isHidden('#linkbox') || !/ประเสริฐ/.test(await A.page.innerText('#lk-for'))) && (await A.page.inputValue('#who')) === 'พ.อ.อ. ประเสริฐ จำลองวงศ์ (จนท.สอ.)');
 check('…BACKLOG has the old and the new Username and who did it', log().some((r) => r[1] === 'CHANGE_USERNAME' && r[2] === 'USERNAME_CHANGED' && r[6] === 'prasert_j' && r[7] === 'prasert_new' && r[10] === 'chan_t'));
-await A.page.selectOption('#role', 'Editor'); await A.save();
-check('…and now a link can be made, for the saved Username', cell('prasert_new', 10) === 'Editor' && /ประเสริฐ/.test(await A.page.innerText('#lk-for')) && log().some((r) => r[2] === 'LINK_GENERATED' && r[5] === 'prasert_new'));
+await A.page.selectOption('#role', 'User'); await A.save();
+check('…and now a link can be made, for the saved Username', cell('prasert_new', 10) === 'User' && /ประเสริฐ/.test(await A.page.innerText('#lk-for')) && log().some((r) => r[2] === 'LINK_GENERATED' && r[5] === 'prasert_new'));
 await A.pick('ชาญ');
 check('the main administrator on his own account: Role locked, no end date, reset allowed', (await A.page.isDisabled('#role')) && (await A.page.isDisabled('#m-role')) && (await A.page.isDisabled('#end-d')) && (await A.page.isEnabled('#go')) && /เปลี่ยน Role ของตัวเองไม่ได้/.test(await A.page.innerText('#role-hint')));
 
 /* ---------- the new user ---------- */
 const B = await device('user');
 check('the user opens the link and sets a password', (await B.setPassword(url, PW.phum)) === 'สร้าง Password สำเร็จ');
-check('the user logs in: Viewer, no way to the Admin page', (await B.login('phum_s', PW.phum, 5)) === 'in' && /Role: Viewer/.test(await B.page.innerText('#in-chips')) && (await B.page.locator('#matrix th.on').innerText()) === 'Viewer' && (await B.page.isHidden('#to-admin')));
+check('the user logs in: User, no web yet, no way to the Admin page', (await B.login('phum_s', PW.phum, 5)) === 'in' && /Role ของบัญชี: User/.test(await B.page.innerText('#in-chips')) && (await B.page.isVisible('#in-noweb')) && (await B.page.isHidden('#to-admin')));
 await B.admin();
 check('a Viewer who types the address of the Admin page is refused by the back end', (await B.page.isVisible('#denied')) && /ไม่มี Role Admin/.test(await B.page.innerText('#denied-t')) && (await B.page.isHidden('#bench')));
 const C0 = await device('nobody'); await C0.page.goto(sim.siteUrl + 'admin.html'); await C0.page.waitForSelector('#login');
@@ -139,31 +140,31 @@ await C.pick('อนันต์');
 check('other admin on another administrator: locked', /Admin ด้วยกัน/.test(await C.page.innerText('#lock')) && (await C.page.isDisabled('#go')));
 await C.pick('กฤษณ์');
 check('other admin on an ordinary account: Username locked and no button for it, Admin not selectable', (await C.page.getAttribute('#uname', 'readonly')) !== null && (await C.page.isHidden('#uname-go')) && /เปลี่ยน Username ได้เฉพาะ chan_t/.test(await C.page.innerText('#uname-hint')) && (await C.page.evaluate(() => document.querySelector('#role option[value=Admin]').disabled)) && /ตั้งได้เฉพาะ chan_t/.test(await C.page.evaluate(() => document.querySelector('#role option[value=Admin]').textContent)));
-await C.page.selectOption('#role', 'Editor'); await C.save();
-check('…and can give Editor', cell('krit_s', 10) === 'Editor' && (await C.page.isVisible('#linkbox')));
+await C.page.selectOption('#role', 'User'); await C.save();
+check('…and can give User', cell('krit_s', 10) === 'User' && (await C.page.isVisible('#linkbox')));
 await C.pick('วิทยา');
 check('other admin on an account without a Username: has to wait for the main administrator', (await C.page.isDisabled('#go')) && /ยังไม่มี Username/.test(await C.page.innerText('#go-why')));
 // someone who alters the page still meets the back end
 const forced = await C.page.evaluate(async () => { const s = JSON.parse(localStorage.getItem('eadmin602:session')); const call = (o) => fetch(window.EADMIN_CONFIG.backendUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ v: 1, session: s.token }, o)) }).then((r) => r.json()); const l = await call({ op: 'admin.list' }); const k = l.people.find((p) => p.username === 'krit_s'), m = l.people.find((p) => p.isSuper); return [(await call({ op: 'admin.link', ref: k.ref, role: 'Admin', username: 'krit_s' })).error.code, (await call({ op: 'admin.link', ref: m.ref, role: 'Viewer', username: m.username })).error.code, (await call({ op: 'admin.role', ref: m.ref, role: 'Viewer' })).error.code, (await call({ op: 'admin.username', ref: k.ref, username: 'krit_new' })).error.code, (await call({ op: 'admin.backupAck' })).error.code]; });
-check('…the same requests sent by hand from his browser are refused by the back end (ข้อ 1.0.3)', forced.join() === 'forbidden,forbidden,forbidden,forbidden,forbidden' && cell('krit_s', 10) === 'Editor' && cell('krit_s', 11) === 'krit_s' && cell('chan_t', 10) === 'Admin', forced);
+check('…the same requests sent by hand from his browser are refused by the back end (ข้อ 1.0.3)', forced.join() === 'forbidden,forbidden,forbidden,forbidden,forbidden' && cell('krit_s', 10) === 'User' && cell('krit_s', 11) === 'krit_s' && cell('chan_t', 10) === 'Admin', forced);
 await C.pick('วีระ');
 check('other admin on his own account: asked what to do', (await C.page.isVisible('#had')) && (await C.page.isEnabled('#m-role')));
-await C.page.check('#m-role'); await C.page.selectOption('#role', 'Viewer'); await C.save();
+await C.page.check('#m-role'); await C.page.selectOption('#role', 'User'); await C.save();
 check('lowering his own Role is asked about first', (await C.page.isVisible('#selfc')) && /chan_t/.test(await C.page.innerText('#selfc')) && cell('weera_t', 10) === 'Admin');
 await C.page.click('#selfc-no');
 check('…and "ยกเลิก" puts the Role back', (await C.page.inputValue('#role')) === 'Admin' && (await C.page.isHidden('#selfc')));
-await C.page.selectOption('#role', 'Viewer'); await C.page.click('#go'); await C.page.click('#selfc-yes'); await C.page.waitForSelector('#denied:not([hidden])');
-check('…after confirming, the page closes for him', cell('weera_t', 10) === 'Viewer' && /ไม่มี Role Admin/.test(await C.page.innerText('#denied-t')));
+await C.page.selectOption('#role', 'User'); await C.page.click('#go'); await C.page.click('#selfc-yes'); await C.page.waitForSelector('#denied:not([hidden])');
+check('…after confirming, the page closes for him', cell('weera_t', 10) === 'User' && /ไม่มี Role Admin/.test(await C.page.innerText('#denied-t')));
 
 /* ---------- change of Role and of end date, by the main administrator ---------- */
 await A.admin(); await A.pick('ภูมิ');
 check('an account with a password: the two choices, without the old wording', (await A.page.isVisible('#had')) && !/เลือกสิ่งที่ต้องการทำ/.test(await A.page.innerText('#had')) && (await A.page.innerText('#go')) === 'Generate One Time Link');
 await A.page.check('#m-role');
 check('CHANGE ROLE: the button says so, and there is nothing to save yet', (await A.page.innerText('#go')) === 'บันทึก Role' && (await A.page.isDisabled('#go')) && (await A.page.innerText('#go-why')) === 'ยังไม่มีการเปลี่ยนแปลง');
-await A.page.selectOption('#role', 'Editor'); await A.save();
-check('CHANGE ROLE saved at once and logged', /มี Role Editor/.test(await A.page.innerText('#done')) && cell('phum_s', 10) === 'Editor' && log().some((r) => r[1] === 'CHANGE_ROLE' && r[5] === 'phum_s' && r[8] === 'Editor' && r[9] === 'Viewer'));
-await B.page.goto(sim.siteUrl); await B.page.waitForFunction(() => /Role: Editor/.test(document.getElementById('in-chips').textContent));
-check('the user sees the new Role on the next visit, without logging in again', (await B.page.locator('#matrix th.on').innerText()) === 'Editor');
+await A.page.selectOption('#role', 'Admin'); await A.save();
+check('CHANGE ROLE saved at once and logged', /มี Role Admin/.test(await A.page.innerText('#done')) && cell('phum_s', 10) === 'Admin' && log().some((r) => r[1] === 'CHANGE_ROLE' && r[5] === 'phum_s' && r[8] === 'Admin' && r[9] === 'User'));
+await B.page.goto(sim.siteUrl); await B.page.waitForFunction(() => /Role ของบัญชี: Admin/.test(document.getElementById('in-chips').textContent));
+check('the user sees the new Role on the next visit, without logging in again', (await B.page.isVisible('#to-admin')));
 await A.pick('ภูมิ'); await A.page.check('#m-role'); await A.birth('end', 1, 1, await A.page.evaluate(() => App.beYear()));
 await A.save();
 check('an end date in the past is saved and shown', /เลยวันสิ้นสุด 1 ม\.ค\./.test(await A.page.innerText('#who-info')), await A.page.innerText('#who-info'));
@@ -183,7 +184,7 @@ check('1.11 the other tab of the same browser is signed in too: the same account
 await tab2.goto(sim.siteUrl + 'admin.html'); await tab2.waitForSelector('#bench:not([hidden])');
 check('…and opens the Admin page without logging in again', (await tab2.innerText('#me-name')) === 'chan_t');
 // an ordinary account with a password, for what follows
-await tab2.fill('#who', 'ธนา'); await tab2.keyboard.press('Enter'); await tab2.selectOption('#role', 'Editor'); await tab2.click('#go'); await tab2.waitForSelector('#done:not([hidden])');
+await tab2.fill('#who', 'ธนา'); await tab2.keyboard.press('Enter'); await tab2.selectOption('#role', 'User'); await tab2.click('#go'); await tab2.waitForSelector('#done:not([hidden])');
 const X = await device('thana-sets-password');
 check('(an Editor is given a password)', (await X.setPassword(await tab2.inputValue('#lk-url'), PW.thana)) === 'สร้าง Password สำเร็จ');
 // two logins that cross in one browser: the form is hidden once an account is in, so the second is sent as a tab that had the form open would send it
@@ -258,6 +259,38 @@ await M.page.click('#bk-ok'); await M.page.waitForSelector('#bk', { state: 'hidd
 check('the main administrator acknowledges: the notice is gone, and BACKLOG says who (ข้อ 1.13.7.3)', log().some((r) => r[1] === 'BACKUP' && r[2] === 'BACKUP_ACKNOWLEDGED' && r[10] === 'chan_t') && log().some((r) => r[2] === 'PROTECT_RESTORED') && sim.sheet(BLOG).length === sim.sheet(LOG).length);
 await C.admin();
 check('…and it is gone for the other administrator as well', await C.page.isHidden('#bk'));
+
+/* ---------- web access per account (ข้อ 1.14) ---------- */
+await M.admin();
+check('1.14.7.1 the main administrator sees the list of webs, empty at first', (await M.page.isVisible('#wl')) && /ยังไม่มีเว็บ/.test(await M.page.innerText('#wl-rows')) && (await M.page.isHidden('#wl-nocol')));
+await M.page.fill('#wl-code', '9x'); await M.page.fill('#wl-name', 'x'); await M.page.fill('#wl-link', 'https://x.example/'); await M.page.click('#wl-add');
+await M.page.waitForSelector('#wl-fail:not([hidden])');
+check('1.14.7.2 a bad code is refused by the back end, with the reason', /ขึ้นต้นด้วยตัวอักษร/.test(await M.page.innerText('#wl-fail')) && sim.sheet(DB, 'WEB LIST').length === 1);
+await M.page.fill('#wl-code', 'aircraft'); await M.page.fill('#wl-name', 'สถานภาพอากาศยาน'); await M.page.fill('#wl-link', 'https://example.github.io/aircraft/'); await M.page.click('#wl-add');
+await M.page.waitForSelector('#wl-done:not([hidden])');
+check('…a web is added: in the list, in the sheet, the boxes emptied', /AIRCRAFT/.test(await M.page.innerText('#wl-rows')) && J(sim.sheet(DB, 'WEB LIST')[1]) === J(['AIRCRAFT', 'สถานภาพอากาศยาน', 'https://example.github.io/aircraft/', 'เปิด']) && (await M.page.inputValue('#wl-code')) === '' && log().some((r) => r[2] === 'WEB_ADDED'));
+await M.pick('ธนา');
+check('1.14.2.6 web access of the chosen account: every web, no access yet, nothing to save', (await M.page.isVisible('#webbox')) && (await M.page.inputValue('#web-rows select[data-web=AIRCRAFT]')) === '' && (await M.page.isDisabled('#web-go')) && /ยังไม่ได้รับสิทธิ์เว็บใด/.test(await M.page.innerText('#web-hint')));
+await M.page.selectOption('#web-rows select[data-web=AIRCRAFT]', 'Editor'); await M.page.click('#web-go'); await M.page.waitForSelector('#web-done:not([hidden])');
+check('…saved at once, no link: the cell, BACKLOG, the message', cell('thana_t', 16) === 'AIRCRAFT=Editor' && log().some((r) => r[2] === 'WEB_ACCESS_CHANGED' && r[5] === 'thana_t') && /บันทึกสิทธิ์เว็บแล้ว 1 เว็บ/.test(await M.page.innerText('#web-done')) && (await M.page.inputValue('#web-rows select[data-web=AIRCRAFT]')) === 'Editor');
+await M.page.screenshot({ path: path.join(OUT, 'admin-web-access.png'), fullPage: true });
+await M.pick('ชาญ');
+check('1.14.2.5 the main administrator on his own account: Admin on every web, nothing to set', (await M.page.inputValue('#web-rows select[data-web=AIRCRAFT]')) === 'Admin' && (await M.page.isDisabled('#web-rows select[data-web=AIRCRAFT]')) && (await M.page.isHidden('#web-actions')));
+await C.admin(); await C.pick('ธนา');
+check('1.14.2.4.1 another administrator: no web access, no list of webs, not a word of them on the page', (await C.page.isHidden('#webbox')) && (await C.page.isHidden('#wl')) && !/AIRCRAFT|สิทธิ์เข้าใช้งานเว็บ|รายชื่อเว็บ/.test(await C.page.innerText('body')));
+await C.page.check('#m-role');
+check('1.14.4.6 another administrator on a User account: the second choice is the end date, Admin cannot be chosen', (await C.page.innerText('#m-role-t')) === 'เปลี่ยนวันสิ้นสุดการใช้งาน' && (await C.page.innerText('#go')) === 'บันทึกวันสิ้นสุด' && (await C.page.evaluate(() => document.querySelector('#role option[value=Admin]').disabled)));
+await D1.page.goto(sim.siteUrl); await D1.page.waitForFunction(() => /AIRCRAFT/.test(document.getElementById('in-webs').textContent));
+check('1.14.3.3 the user sees the web after login, with the Role there and a link to it', /สถานภาพอากาศยาน/.test(await D1.page.innerText('#in-webs')) && /Editor/.test(await D1.page.innerText('#in-webs')) && (await D1.page.getAttribute('#in-webs a', 'href')) === 'https://example.github.io/aircraft/' && (await D1.page.isHidden('#in-noweb')));
+const enterAs = (dev, code) => dev.page.evaluate((c) => App.enterWeb(c).then((r) => r.web.role, (e) => e.code), code);
+check('1.14.3.5 a page of the web asks the back end: Editor here; a web without access is refused', (await enterAs(D1, 'AIRCRAFT')) === 'Editor' && (await enterAs(D1, 'REPORT')) === 'no_web');
+await D1.page.screenshot({ path: path.join(OUT, 'login-webs.png'), fullPage: true });
+await M.admin(); await M.page.click('[data-wl-toggle=AIRCRAFT]'); await M.page.waitForSelector('#wl-done:not([hidden])');
+check('1.14.7.4 the web is closed: nobody enters, the access is kept', (await enterAs(D1, 'AIRCRAFT')) === 'web_closed' && cell('thana_t', 16) === 'AIRCRAFT=Editor' && /ปิด/.test(await M.page.innerText('#wl-rows')));
+await D1.page.goto(sim.siteUrl); await D1.page.waitForFunction(() => !document.getElementById('in-noweb').hidden);
+check('…and it is gone from the list after login', !/AIRCRAFT/.test(await D1.page.innerText('#in-webs')));
+await M.page.click('[data-wl-toggle=AIRCRAFT]'); await M.page.waitForSelector('#wl-done:not([hidden])');
+check('…opened again, the old access works again', (await enterAs(D1, 'AIRCRAFT')) === 'Editor');
 
 /* ---------- one hour (ข้อ 1.10) ---------- */
 sim.advance(56 * 60000);

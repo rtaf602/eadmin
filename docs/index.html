@@ -56,18 +56,27 @@
       <p id="in-name"></p>
     </div>
     <div class="chips" id="in-chips"></div>
-    <div class="tbl">
-      <table class="matrix" id="matrix">
-        <thead><tr><th>สิ่งที่ทำได้</th><th data-r="Admin">Admin</th><th data-r="Editor">Editor</th><th data-r="Viewer">Viewer</th></tr></thead>
-        <tbody>
-          <tr><td>เข้าดูหน้าต่าง ๆ ในระบบ</td><td data-r="Admin" class="yes">ได้</td><td data-r="Editor" class="yes">ได้</td><td data-r="Viewer" class="yes">ได้</td></tr>
-          <tr><td>ดาวน์โหลด PDF, Excel, Word</td><td data-r="Admin" class="yes">ได้</td><td data-r="Editor" class="yes">ได้</td><td data-r="Viewer" class="no2">ไม่ได้</td></tr>
-          <tr><td>บันทึกและแก้ไขรายงานใน Form</td><td data-r="Admin" class="yes">ได้ทั้งหมด</td><td data-r="Editor" class="yes">ได้</td><td data-r="Viewer" class="no2">ไม่ได้</td></tr>
-          <tr><td>แก้ไขระบบ</td><td data-r="Admin" class="yes">ได้</td><td data-r="Editor" class="no2">ไม่ได้</td><td data-r="Viewer" class="no2">ไม่ได้</td></tr>
-          <tr><td>ให้สิทธิ์ผู้ใช้ และ Generate One Time Link</td><td data-r="Admin" class="yes">ได้</td><td data-r="Editor" class="no2">ไม่ได้</td><td data-r="Viewer" class="no2">ไม่ได้</td></tr>
-        </tbody>
-      </table>
+    <!-- ข้อ 1.14.3.3: the webs this account can use, each with its Role there; webs without access are not shown -->
+    <div class="field">
+      <h3>เว็บที่บัญชีนี้เข้าได้</h3>
+      <ul class="rights" id="in-webs"></ul>
+      <p class="note warn" id="in-noweb" hidden>บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าใช้งานเว็บใด ให้ติดต่อ Admin</p>
     </div>
+    <details>
+      <summary>สิทธิ์ของแต่ละ Role ในเว็บ</summary>
+      <div class="tbl">
+        <table class="matrix" id="matrix">
+          <thead><tr><th>สิ่งที่ทำได้ในเว็บนั้น</th><th data-r="Admin">Admin</th><th data-r="Editor">Editor</th><th data-r="Viewer">Viewer</th></tr></thead>
+          <tbody>
+            <tr><td>เข้าดูหน้าต่าง ๆ ในเว็บ</td><td data-r="Admin" class="yes">ได้</td><td data-r="Editor" class="yes">ได้</td><td data-r="Viewer" class="yes">ได้</td></tr>
+            <tr><td>ดาวน์โหลด PDF, Excel, Word</td><td data-r="Admin" class="yes">ได้</td><td data-r="Editor" class="yes">ได้</td><td data-r="Viewer" class="no2">ไม่ได้</td></tr>
+            <tr><td>บันทึกและแก้ไขรายงานใน Form</td><td data-r="Admin" class="yes">ได้ทั้งหมด</td><td data-r="Editor" class="yes">ได้</td><td data-r="Viewer" class="no2">ไม่ได้</td></tr>
+            <tr><td>แก้ไขระบบของเว็บ</td><td data-r="Admin" class="yes">ได้</td><td data-r="Editor" class="no2">ไม่ได้</td><td data-r="Viewer" class="no2">ไม่ได้</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint">บัญชีเดียวกันมี Role ต่างกันในแต่ละเว็บได้ การเข้าหน้า Admin ขึ้นกับ Role ของบัญชี ซึ่งมีสองค่า คือ Admin และ User</p>
+    </details>
     <div class="actions">
       <a class="btn primary" id="to-admin" href="admin.html" hidden>ไปหน้า Admin</a>
       <button type="button" class="btn" id="out">ออกจากระบบ</button>
@@ -91,8 +100,11 @@
     if (!s) return;
     const u = s.user;
     $('in-name').textContent = (u.rank ? u.rank + ' ' : '') + u.name + ' (' + u.pos + ')';
-    $('in-chips').innerHTML = '<span class="chip acc">Role: ' + esc(u.role) + '</span><span class="chip">' + esc(u.username) + '</span><span class="chip">ใช้งานได้ถึง ' + esc(fmtT(s.exp)) + ' น.</span>';
-    document.querySelectorAll('#matrix [data-r]').forEach((c) => c.classList.toggle('on', c.dataset.r === u.role));
+    $('in-chips').innerHTML = '<span class="chip acc">Role ของบัญชี: ' + esc(u.isSuper ? 'Admin หลัก' : u.role) + '</span><span class="chip">' + esc(u.username) + '</span><span class="chip">ใช้งานได้ถึง ' + esc(fmtT(s.exp)) + ' น.</span>';
+    const webs = u.webs || [], safe = (l) => (/^https:\/\//.test(l) ? l : '');
+    $('in-webs').innerHTML = webs.map((w) => '<li><span>' + esc(w.name) + ' <span class="hint mono">' + esc(w.code) + '</span></span><span class="actions"><span class="chip acc">' + esc(w.role) + '</span>'
+      + (safe(w.link) ? '<a class="btn small" href="' + esc(safe(w.link)) + '" rel="noopener">เปิดเว็บ</a>' : '') + '</span></li>').join('');
+    $('in-webs').hidden = !webs.length; $('in-noweb').hidden = !!webs.length;
     $('to-admin').hidden = u.role !== 'Admin';
   }
   const say = (t) => { $('msg').hidden = !t; $('msg').textContent = t || ''; };

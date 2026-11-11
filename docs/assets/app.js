@@ -185,5 +185,12 @@ window.App = (() => {
   }
   function disableDP(id, off) { ['-d', '-m', '-y'].forEach((s) => { $(id + s).disabled = off; }); }
 
-  return { $, esc, api, session, signIn, setUser, signOut, farewell, giveUp, flash, watch, now, fmtD, fmtT, fmtDT, mmss, beYear, years, buildDP, dp, setDP, disableDP, hasBackend: !!BACKEND };
+  /* ---------- a page of one web (ข้อ 1.14.3) ----------
+     A web that uses this login calls App.enterWeb('AIRCRAFT') when its page opens. The back end answers with the
+     account and its Role in that web, or refuses: { code: 'no_web' } no access, { code: 'web_closed' } the web is closed.
+     Showing or hiding buttons by that Role is only a convenience: every request of the web that reads or writes data
+     has to be checked again by the back end with webAuth_(). */
+  const enterWeb = (code) => api('web.enter', { web: code });
+
+  return { $, esc, api, session, signIn, setUser, signOut, farewell, giveUp, flash, watch, now, fmtD, fmtT, fmtDT, mmss, beYear, years, buildDP, dp, setDP, disableDP, enterWeb, hasBackend: !!BACKEND };
 })();
