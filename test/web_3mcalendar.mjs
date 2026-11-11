@@ -12,6 +12,9 @@ import { startSim, fourFiles, SETUP4, BIRTH, idGov, ROOT } from './gas_sim.mjs';
 
 const EAD = ROOT, CAL = process.env.CAL_DIR || path.join(ROOT, '..', '3mcalendar'), OUT = path.join(ROOT, 'test/out/3mcalendar');
 if (!fs.existsSync(path.join(CAL, 'apps-script/Code.gs'))) { console.log('skipped: 3mcalendar is not at ' + CAL + ' (set CAL_DIR)'); console.log('errors: []'); process.exit(0); }
+// the code of this web, as the calendar has it (CFG.WEB_CODE); config.js of the page must say the same
+const WEB = /WEB_CODE:\s*'([A-Z][A-Z0-9_]{1,19})'/.exec(fs.readFileSync(path.join(CAL, 'apps-script/Code.gs'), 'utf8'))[1];
+const pageCode = /webCode:\s*'([^']*)'/.exec(fs.readFileSync(path.join(CAL, 'config.js'), 'utf8'));
 fs.mkdirSync(OUT, { recursive: true });
 const bad = []; const check = (name, cond, got) => { console.log((cond ? 'ok   ' : 'FAIL ') + name + (cond ? '' : '  → ' + JSON.stringify(got))); if (!cond) bad.push(name); };
 const J = JSON.stringify;
@@ -23,7 +26,7 @@ const site = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x'); let p = decodeURIComponent(u.pathname);
   if (p.endsWith('/')) p += 'index.html';
   if (p === '/eadmin/assets/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end('window.EADMIN_CONFIG = ' + J({ backendUrl: sim.backendUrl }) + ';'); return; }
-  if (p === '/3mcalendar/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end('window.MP_CONFIG = ' + J({ apiUrl: calUrl, webCode: 'CALENDAR' }) + ';'); return; }
+  if (p === '/3mcalendar/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); res.end('window.MP_CONFIG = ' + J({ apiUrl: calUrl, webCode: WEB }) + ';'); return; }
   let file = null;
   if (p.startsWith('/eadmin/')) file = path.join(EAD, 'docs', path.normalize(p.slice(8)));
   else if (p.startsWith('/3mcalendar/')) file = path.join(CAL, path.normalize(p.slice(12)));
@@ -46,9 +49,10 @@ for (const [u, pw] of [['thana_t', PW.thana], ['phum_s', PW.phum], ['somchai_t',
   const g = post('admin.link', { session: S, ref: ref(u), role: 'User', end: '' });
   post('link.use', { token: g.token, password: pw, birth: BIRTH });
 }
-check('web list: CALENDAR added', post('admin.webList', { session: S, act: 'add', code: 'CALENDAR', name: 'Master Plan 3 เดือน', link: 'https://example.github.io/3mcalendar/' }).ok);
-post('admin.web', { session: S, ref: ref('thana_t'), web: { CALENDAR: 'Editor' } });
-post('admin.web', { session: S, ref: ref('phum_s'), web: { CALENDAR: 'Viewer' } });
+check('the code of the web is the same in Code.gs and config.js (' + WEB + ')', !!pageCode && pageCode[1] === WEB, pageCode && pageCode[1]);
+check('web list: the calendar added', post('admin.webList', { session: S, act: 'add', code: WEB, name: 'Master Plan 3 เดือน', link: 'https://example.github.io/3mcalendar/' }).ok);
+post('admin.web', { session: S, ref: ref('thana_t'), web: { [WEB]: 'Editor' } });
+post('admin.web', { session: S, ref: ref('phum_s'), web: { [WEB]: 'Viewer' } });
 post('logout', { session: S });
 
 /* ---------- the 3mcalendar back end, on a stand-in of its own ---------- */
@@ -122,12 +126,12 @@ const cpost = (o) => JSON.parse(cctx.doPost({ postData: { contents: J(o) } }).ge
 const login = (u, pw, n) => post('login', { username: u, password: pw, idGov: String(idGov(n)), birth: BIRTH });
 const sT = login('thana_t', PW.thana, 3).session, sP = login('phum_s', PW.phum, 5).session, sM = login('somchai_t', PW.som, 9).session;
 S = login('chan_t', PW.chan, 8).session;
-const passOf = (s, w) => post('web.enter', { session: s, web: w || 'CALENDAR' }).pass;
+const passOf = (s, w) => post('web.enter', { session: s, web: w || WEB }).pass;
 const T = passOf(sT), P = passOf(sP);
-post('admin.web', { session: S, ref: ref('somchai_t'), web: { CALENDAR: 'Viewer' } });
+post('admin.web', { session: S, ref: ref('somchai_t'), web: { [WEB]: 'Viewer' } });
 const M = passOf(sM);
-post('admin.web', { session: S, ref: ref('somchai_t'), web: { CALENDAR: '' } });
-check('the pages get a pass for the web; somebody without access gets none', !!T && !!P && !!M && !post('web.enter', { session: sM, web: 'CALENDAR' }).pass);
+post('admin.web', { session: S, ref: ref('somchai_t'), web: { [WEB]: '' } });
+check('the pages get a pass for the web; somebody without access gets none', !!T && !!P && !!M && !post('web.enter', { session: sM, web: WEB }).pass);
 const ce = (r) => (r.error || {}).code;
 check('no session: refused, nothing read', ce(cpost({ action: 'load' })) === 'auth' && ce(cpost({ action: 'poll', tab: 't1' })) === 'auth');
 check('the old access-code login is gone', ce(cpost({ action: 'login', name: 'x', code: 'operation.slide' })) === 'bad_action');
@@ -137,7 +141,7 @@ post('admin.webList', { session: S, act: 'add', code: 'OTHER', name: 'อีก�
 const other = passOf(S, 'OTHER');
 check('a pass for another web: refused, and said why', ce(cpost({ action: 'load', pass: other })) === 'wrong_web');
 const lT = cpost({ action: 'load', pass: T });
-check('Editor: loads the plan, with the name of the account and the Role', !lT.error && lT.me.role === 'Editor' && lT.me.name === 'น.อ. ธนา ทดลองกิจ' && !!lT.state, lT);
+check('Editor: loads the plan, with the name of the account and the Role', !lT.error && lT.me.role === 'Editor' && lT.me.name === 'ธนา ทดลองกิจ' && !!lT.state, lT);
 const lP = cpost({ action: 'load', pass: P });
 check('Viewer: loads the plan, Role Viewer', !lP.error && lP.me.role === 'Viewer', lP);
 const lM = cpost({ action: 'load', pass: M });
@@ -145,28 +149,35 @@ check('no access to this web: refused with the agreed message', ce(lM) === 'no_w
 check('Viewer cannot take the edit lock, write, save, restore or redraw', ['lock', 'write', 'save', 'restore', 'render'].every((a) => ce(cpost({ action: a, pass: P, tab: 'p1', mode: 'acquire', ops: [] })) === 'forbidden'));
 check('Viewer can look: poll, history, saved versions', !cpost({ action: 'poll', pass: P, tab: 'p1' }).error && !cpost({ action: 'listLogs', pass: P }).error && !cpost({ action: 'listSnaps', pass: P }).error);
 const lk = cpost({ action: 'lock', pass: T, tab: 't1', mode: 'acquire' });
-check('Editor takes the edit lock, shown with the account name', lk.ok && lk.lock.by === 'น.อ. ธนา ทดลองกิจ', lk);
+check('Editor takes the edit lock, shown with the account name', lk.ok && lk.lock.by === 'ธนา ทดลองกิจ', lk);
 const wr = cpost({ action: 'write', pass: T, tab: 't1', ops: [{ c: 'events', op: 'set', id: 'e1', data: { month: '2026-11', start: 3, end: 5, lane: 0, rows: 1, text: 'ภารกิจทดลอง', type: 'a32x', by: 'someone else' } }, { c: 'logs', data: { action: 'เพิ่มภารกิจ', detail: 'x' } }] });
-check('Editor writes; the history and the mission carry the account name, not one the page sends', wr.ok && books[vm.runInContext('CFG.SOURCE_ID', cctx)].events.rows[1][16] === 'น.อ. ธนา ทดลองกิจ' && cpost({ action: 'listLogs', pass: P }).list[0].by === 'น.อ. ธนา ทดลองกิจ', wr);
+check('Editor writes; the history and the mission carry the account name, not one the page sends', wr.ok && books[vm.runInContext('CFG.SOURCE_ID', cctx)].events.rows[1][16] === 'ธนา ทดลองกิจ' && cpost({ action: 'listLogs', pass: P }).list[0].by === 'ธนา ทดลองกิจ', wr);
 check('another login of an editor cannot write under the lock of this tab', ce(cpost({ action: 'write', pass: passOf(S), tab: 't1', ops: [] })) === 'not_lock_holder');
 const pres = cpost({ action: 'poll', pass: P, tab: 'p1', presence: { name: 'ปลอมตัว', mode: 'view' } });
-check('presence: the name shown to others is the account name, never one the page makes up', pres.peers.some((x) => x.presence.name === 'น.ต. ภูมิ สาธิตพงศ์') && !J(pres.peers).includes('ปลอมตัว'), pres.peers);
+check('presence: the name shown to others is the account name, never one the page makes up', pres.peers.some((x) => x.presence.name === 'ภูมิ สาธิตพงศ์') && !J(pres.peers).includes('ปลอมตัว'), pres.peers);
 const f0 = fetches; for (let i = 0; i < 5; i++) cpost({ action: 'poll', pass: P, tab: 'p1' });
 check('frequent polls ask the login system at most once per minute', fetches - f0 === 0, fetches - f0);
 const f1 = fetches; cpost({ action: 'write', pass: T, tab: 't1', ops: [] });
 check('every write asks the login system afresh', fetches - f1 === 1, fetches - f1);
+const snapNow = cpost({ action: 'save', pass: T, tab: 't1', label: 'x', iso: '2026-11-11', xlsx: '', filename: 'f' });
+const dirty0 = cpost({ action: 'lastSnap', pass: P }).dirty;
+const ex1 = cpost({ action: 'exported', pass: T, kind: 'pdf', filename: 'plan.pdf' }), ex2 = cpost({ action: 'exported', pass: T, kind: 'xlsx', filename: 'plan.xlsx' });
+const lg = cpost({ action: 'listLogs', pass: P }).list;
+check('export to PDF / Excel: in the history with the name from the column ชื่อ-สกุล (no rank), without the edit lock', snapNow.ok && ex1.ok && ex2.ok && lg[0].action === 'EXPORT TO EXCEL' && lg[1].action === 'EXPORT TO PDF' && lg[0].by === 'ธนา ทดลองกิจ' && lg[1].detail === 'plan.pdf', lg.slice(0, 2));
+check('…an export is no edit: the plan does not become "not yet closed"', dirty0 === false && cpost({ action: 'lastSnap', pass: P }).dirty === false);
+check('…a Viewer cannot write an export into the history', ce(cpost({ action: 'exported', pass: P, kind: 'pdf', filename: 'x' })) === 'forbidden');
 // access taken away in the Admin page
-post('admin.web', { session: S, ref: ref('thana_t'), web: { CALENDAR: '' } });
+post('admin.web', { session: S, ref: ref('thana_t'), web: { [WEB]: '' } });
 check('access taken away: the next write is refused at once', ce(cpost({ action: 'write', pass: T, tab: 't1', ops: [] })) === 'no_web');
 sim.advance(61000);
 check('…and looking is refused within a minute', ce(cpost({ action: 'poll', pass: T, tab: 't1' })) === 'no_web');
-post('admin.web', { session: S, ref: ref('thana_t'), web: { CALENDAR: 'Editor' } });
-post('admin.web', { session: S, ref: ref('phum_s'), web: { CALENDAR: 'Editor' } });
+post('admin.web', { session: S, ref: ref('thana_t'), web: { [WEB]: 'Editor' } });
+post('admin.web', { session: S, ref: ref('phum_s'), web: { [WEB]: 'Editor' } });
 check('Viewer made Editor: may edit at once (the edit lock is busy with the other editor, not refused)', (() => { const r = cpost({ action: 'lock', pass: P, tab: 'p2', mode: 'acquire' }); return !r.error; })());
-post('admin.web', { session: S, ref: ref('phum_s'), web: { CALENDAR: 'Viewer' } });
-post('admin.webList', { session: S, act: 'close', code: 'CALENDAR' });
+post('admin.web', { session: S, ref: ref('phum_s'), web: { [WEB]: 'Viewer' } });
+post('admin.webList', { session: S, act: 'close', code: WEB });
 check('the web closed in the Admin page: refused (web_closed)', ce(cpost({ action: 'lock', pass: T, tab: 't9', mode: 'acquire' })) === 'web_closed');
-post('admin.webList', { session: S, act: 'open', code: 'CALENDAR' });
+post('admin.webList', { session: S, act: 'open', code: WEB });
 sim.advance(3600000);
 check('the hour of the login is over: refused (auth)', ce(cpost({ action: 'load', pass: T })) === 'auth');
 check('nothing in the calendar\'s properties or cache holds a pass', !J(cprops).includes(T.slice(-40)) && ![...ccache.keys(), ...[...ccache.values()].map((e) => e.v)].some((x) => String(x).includes(T.slice(-40))));
@@ -211,6 +222,12 @@ await A.page.waitForSelector('#editBtn', { timeout: 15000 });
 check('after the login: back on the calendar, the plan shown, the account name and Role in the status line', (await A.page.isHidden('#lock')) && /ธนา ทดลองกิจ · Editor/.test(await A.page.innerText('.statusline')) && /ภารกิจทดลอง/.test(await A.page.innerText('#sheet')));
 check('Editor: the edit button and export are there', (await A.page.isVisible('#editBtn')) && (await A.page.isVisible('#expBtn')));
 await A.page.screenshot({ path: path.join(OUT, '1-editor.png') });
+const calLog = () => books[vm.runInContext('CFG.SOURCE_ID', cctx)].logs.rows.slice(1).filter((r) => r[0]).reverse().map((r) => ({ by: r[2], action: r[3], detail: r[4] }));
+const nLogs = calLog().length;
+await A.page.click('#expBtn'); const dl = A.page.waitForEvent('download'); await A.page.click('[data-v="xlsx"]'); await dl;
+await A.page.waitForTimeout(1500);
+const lgB = calLog();
+check('in the page: EXPORT TO EXCEL clicked → the file, and a line in the history with the account name', lgB.length === nLogs + 1 && lgB[0].action === 'EXPORT TO EXCEL' && lgB[0].by === 'ธนา ทดลองกิจ' && /\.xlsx$/.test(lgB[0].detail), lgB[0]);
 await A.page.click('#editBtn');
 await A.page.waitForSelector('.lockbar.mine', { timeout: 10000 });
 check('Editor: edit mode, the edit lock taken', /คุณกำลังแก้ไขแผน/.test(await A.page.innerText('#lockBar')));
@@ -224,7 +241,7 @@ await V.page.goto(ORIGIN + '/3mcalendar/');
 await V.page.waitForFunction(() => document.querySelector('.statusline') && /Viewer/.test(document.querySelector('.statusline').innerText), null, { timeout: 15000 });
 check('Viewer: looks only; no edit button, no PREVIEW or export', !(await V.page.isVisible('#editBtn')) && !(await V.page.isVisible('#expBtn')) && !(await V.page.isVisible('#pvBtn')) && /ดูอย่างเดียว \(Viewer\)/.test(await V.page.innerText('.statusline')));
 await V.page.screenshot({ path: path.join(OUT, '2-viewer.png') });
-const vDirect = await V.page.evaluate(async (url) => { const s = JSON.parse(localStorage.getItem('eadmin602:session')).token; const e = await App.enterWeb('CALENDAR'); const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'write', pass: e.pass, tab: 'x', ops: [{ c: 'events', op: 'delete', id: 'e1' }] }) }); return r.json(); }, calUrl);
+const vDirect = await V.page.evaluate(async ([url, WEB]) => { const s = JSON.parse(localStorage.getItem('eadmin602:session')).token; const e = await App.enterWeb(WEB); const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'write', pass: e.pass, tab: 'x', ops: [{ c: 'events', op: 'delete', id: 'e1' }] }) }); return r.json(); }, [calUrl, WEB]);
 check('Viewer sending a write by hand from the browser: refused by the calendar back end', (vDirect.error || {}).code === 'forbidden', vDirect);
 
 const N = await device('noweb');
