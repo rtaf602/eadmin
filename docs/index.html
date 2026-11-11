@@ -91,7 +91,10 @@
   'use strict';
   const { $, esc, api, session, signIn, signOut, farewell, giveUp, flash, watch, fmtT, beYear, years, buildDP, dp, setDP } = App;
   buildDP('birth', years(beYear() - 17, beYear() - 90));
-  let waiting = null;                                              // { ticket, username, timer }: this device waits for the one in use (ข้อ 1.12.2)
+  let waiting = null;
+  // came here from a page of another web (?next=): back there once this browser has a login
+  const back = App.next();
+  const goBack = () => { if (back && session()) { location.replace(back); return true; } return false; };                                              // { ticket, username, timer }: this device waits for the one in use (ข้อ 1.12.2)
 
   // ข้อ 1.11.1: with an account signed in, the page says which one and shows no login form
   function show() {
@@ -117,6 +120,7 @@
     if (old && old.user.username !== r.user.username) { farewell(old.token); tell('overlap', 'ตรวจพบการเข้าสู่ระบบซ้อนกันในเบราว์เซอร์นี้ บัญชี ' + old.user.username + ' ถูกออกจากระบบแล้ว ทุกแท็บใช้บัญชี ' + r.user.username); }
     signIn(r);
     $('pw').value = ''; $('card').value = ''; setDP('birth', ''); $('flash').hidden = true; say('');
+    if (goBack()) return;
     show();
   }
   // this device asks again until it is let in, turned away, or the wait is called off
@@ -157,6 +161,7 @@
   const note = flash();
   if (!App.hasBackend) { $('flash').hidden = false; $('flash').textContent = 'ยังไม่ได้ใส่ที่อยู่ระบบหลังบ้านในไฟล์ assets/config.js หน้านี้จึงยังใช้งานไม่ได้'; $('go').disabled = true; }
   else if (note && !session()) tell('flash', note);
+  if (goBack()) return;
   show();
   let lastUser = session() ? session().user.username : '';
   // the login of this browser changed in another tab: this tab follows (ข้อ 1.11.2, 1.11.3)
@@ -167,6 +172,7 @@
       if (before) tell('overlap', 'ตรวจพบการเข้าสู่ระบบซ้อนกันในเบราว์เซอร์นี้ บัญชี ' + before + ' ถูกออกจากระบบแล้ว ทุกแท็บใช้บัญชี ' + s.user.username);
     } else if (was) tell('flash', flash());
     lastUser = s ? s.user.username : '';
+    if (s && goBack()) return;
     show();
   });
   if (App.hasBackend) {

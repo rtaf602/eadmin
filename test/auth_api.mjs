@@ -476,6 +476,31 @@ check('a web whose state cell was emptied by hand counts as closed', code(enter(
 wlRows[stateAt][3] = 'เปิด';
 check('the web calls that write are refused without a session before anything is read', ['admin.web', 'admin.webList'].every((op) => code(post(op, {})) === 'auth'));
 
+/* ---------- web.check: the back end of another web asks for a request it received (ข้อ 1.14.3.5) ---------- */
+const wc = (pass, web) => post('web.check', { pass, web });
+const eS = enter(S, 'REPORT'), passS = eS.pass;
+check('web.enter hands the page a pass for that web; it is not the session', typeof passS === 'string' && passS.length > 40 && passS !== S);
+const c1 = wc(passS, 'REPORT');
+check('web.check: who it is and the Role in that web, and nothing more (no ID number, no list of other webs)', c1.ok && c1.role === 'Admin' && c1.user.username === 'chan_t' && c1.user.name && c1.web.code === 'REPORT' && c1.expiresAt > c1.now && !('webs' in c1.user) && !JSON.stringify(c1).includes(String(idGov(8))) && !('take' in c1), c1);
+check('a pass is good for its own web only, and is no session: not for another web, not for the Admin page, not for me', code(wc(passS, 'AIRCRAFT')) === 'auth' && code(list(passS)) === 'auth' && code(me(passS)) === 'auth' && code(post('admin.web', { session: passS })) === 'auth' && code(enter(passS, 'REPORT')) === 'auth');
+check('a session is no pass: the back end of a web cannot ask with one', code(wc(S, 'REPORT')) === 'auth' && code(post('web.check', { session: S, web: 'REPORT' })) === 'auth');
+check('web.check refuses a made-up or empty pass', code(wc('', 'REPORT')) === 'auth' && code(wc('abc.def', 'REPORT')) === 'auth' && code(wc(passS.slice(0, -2) + (passS.endsWith('a') ? 'bb' : 'aa'), 'REPORT')) === 'auth');
+const passSom = (() => { wa(S, 'somchai_t', { REPORT: 'Viewer' }); const p = enter(sSom2, 'REPORT').pass; wa(S, 'somchai_t', { REPORT: '' }); return p; })();
+check('access taken away after the pass was handed out: refused (the row is read again)', !!passSom && code(wc(passSom, 'REPORT')) === 'no_web');
+check('a closed web: refused', (() => { wl(S, { act: 'close', code: 'REPORT' }); const r = code(wc(passS, 'REPORT')); wl(S, { act: 'open', code: 'REPORT' }); return r === 'web_closed'; })());
+// a second device waits for the account; the back end of the web asks with the pass of the first one
+wa(S, 'somchai_t', { REPORT: 'Viewer' });
+const passSom2 = enter(sSom2, 'REPORT').pass;
+const wcB = login1('somchai_t', 'Backup-Check-Pass-10', 9);
+const wcQ = wc(passSom2, 'REPORT');
+sim.advance(9000); post('login.wait', { ticket: wcB.ticket });
+const wcT = ping(sSom2);
+check('web.check does not start the 10 seconds of ข้อ 1.12.1: only the page itself being told does', wcB.wait === true && wcQ.ok && !('take' in wcQ) && wcT.ok && !!wcT.take && wcT.take.until - wcT.now === 10000, [wcQ, wcT]);
+post('session.deny', { session: sSom2, rid: wcT.take.rid });
+check('…the account taken by another device: the pass of the old device is refused too', (() => { const b = login1('somchai_t', 'Backup-Check-Pass-10', 9); ping(sSom2); sim.advance(13100); post('login.wait', { ticket: b.ticket }); return code(wc(passSom2, 'REPORT')) === 'taken'; })());
+check('…the hour of the login over: the pass is over too', (() => { sim.advance(3600000); return code(wc(passS, 'REPORT')) === 'auth'; })());
+S = login('chan_t', PW.chan, 8).session;
+
 /* ---------- what is left in the sheets ---------- */
 const everything = JSON.stringify([sim.sheet(DB, 'DATABASE LOGIN'), sim.sheet(DB, 'LINK TOKEN'), sim.sheet(LOG), sim.tabs(BDB).map((t) => t.rows), sim.tabs(BLOG).map((t) => t.rows), Object.keys(sim.props).filter((k) => k !== 'SECRET').map((k) => [k, sim.props[k]])]);
 check('no password is anywhere in the sheets, the backup files or the script properties', !Object.values(PW).concat(['Text-Birth-Pass-08', 'Some-Password-07']).some((p) => everything.includes(p)));

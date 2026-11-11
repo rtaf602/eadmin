@@ -5,7 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 const dir = fileURLToPath(new URL('.', import.meta.url));
-const tests = ['auth_api', 'auth_site'];
+const tests = ['auth_api', 'auth_site', 'web_3mcalendar'];      // web_3mcalendar is skipped without ../3mcalendar
 const only = process.argv.slice(2);
 let bad = 0;
 for (const t of tests.filter((x) => !only.length || only.includes(x))) {
