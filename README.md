@@ -5,7 +5,7 @@
 | ที่อยู่ | คืออะไร |
 |---|---|
 | `docs/index.html` | หน้าเข้าสู่ระบบ |
-| `docs/admin.html` | หน้า Admin: สร้าง Password ครั้งแรก, Reset Password, เปลี่ยน Role, เปลี่ยน Username, กำหนดวันสิ้นสุดการใช้งาน |
+| `docs/admin.html` | หน้า Admin: สร้าง Password ครั้งแรก, Reset Password, เปลี่ยน Role, เปลี่ยน Username, กำหนดวันสิ้นสุดการใช้งาน; Admin หลัก: สิทธิ์เข้าใช้งานเว็บ และรายชื่อเว็บ |
 | `docs/set-password.html` | หน้าที่ผู้ใช้ตั้ง Password ของตัวเองจาก One Time Link |
 | `docs/assets/config.js` | ที่อยู่ระบบหลังบ้าน (ใส่ตอนติดตั้ง) |
 | `backend/Code.gs` | ระบบหลังบ้านบน Google Apps Script อ่านและเขียน Google Sheet ในนามเจ้าของสคริปต์ รวมการ Backup และการตั้ง Protect sheet ของไฟล์ Backup |

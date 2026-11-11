@@ -111,3 +111,13 @@ tbody tr:last-child td { border-bottom: 0; }
 #app-take b { font-variant-numeric: tabular-nums; font-size: 1.15em; }
 .events { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 4px; }
 
+/* ข้อ 1.14: web access and the list of webs (Admin page), the webs after login (login page) */
+#web-rows td, #wl-rows td { vertical-align: middle; white-space: normal; }
+#web-rows select { width: auto; min-width: 9.5em; }
+#wl-rows input { min-width: 10em; }
+#wl-rows .actions, #in-webs .actions { flex-wrap: nowrap; gap: 8px; }
+#in-webs li { align-items: center; }
+.wl-add { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr) minmax(0, 1.4fr) auto; gap: 8px; }
+@media (max-width: 860px) { .wl-add { grid-template-columns: minmax(0, 1fr); } }
+details > summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+details[open] > summary { margin-bottom: 10px; }

@@ -7,6 +7,7 @@
  *   3) ให้ผู้ใช้ตั้ง Password ของตัวเองจาก One Time Link
  *   4) บันทึกประวัติลงชีท BACKLOG
  *   5) คัดลอกข้อมูลไปไฟล์ Backup สองไฟล์ และตั้ง Protect sheet ให้ทุกแท็บของไฟล์ Backup
+ *   6) บอกว่าแต่ละบัญชีเข้าเว็บใดได้ และมี Role ใดในเว็บนั้น (Admin หลักกำหนด, ข้อ 1.14)
  * สคริปต์ทำงานในนามเจ้าของสคริปต์ ชีททุกไฟล์จึงตั้ง Share เป็น Restricted ได้
  * ติดตั้งสคริปต์นี้ด้วยบัญชี Google ที่เป็นเจ้าของไฟล์ Backup (บัญชีนั้นต้องแก้ไขไฟล์ LOGIN DATABASE และ BACKLOG ได้ด้วย)
  * เลขบัตร วันเกิด Salt และ hash ไม่ถูกส่งออกไปที่หน้าเว็บ
@@ -50,7 +51,9 @@ const OPT = {
   loginLockMinutes: 15,
   loginTab: 'DATABASE LOGIN',
   tokenTab: 'LINK TOKEN',
-  roles: ['Admin', 'Editor', 'Viewer'],
+  webTab: 'WEB LIST',          // รายชื่อเว็บที่ใช้ระบบ Login นี้ (ข้อ 1.14.5.1)
+  roles: ['Admin', 'User'],   // Role ของบัญชี: Admin เข้าหน้า Admin ได้, User คือผู้ใช้ทั่วไป (ข้อ 1.14.4.1)
+  webRoles: ['Admin', 'Editor', 'Viewer'],   // Role ในแต่ละเว็บ (ข้อ 1.14.2.1)
   tz: 'Asia/Bangkok',
 };
 
@@ -61,6 +64,10 @@ const CFG = [PROP.db, PROP.log, PROP.bdb, PROP.blog, PROP.superId, PROP.secret, 
 // often it asks, how long its ticket lasts, how long a refusal is remembered
 const DEV = { grace: 3, gone: 10, waitPollMs: 2500, ticket: 120, denyKeep: 60 };
 // the header cells of the LOGIN DATABASE tab; columns are found by these names, not by their letters
+// the column of web access (ข้อ 1.14.5.2): setup() adds it to the header row when the sheet does not have it yet
+const WEB_COL = 'สิทธิ์เว็บ';
+const WEB_HEAD = ['รหัสเว็บ', 'ชื่อเว็บ', 'ลิงก์', 'สถานะ'], WEB_OPEN = 'เปิด', WEB_SHUT = 'ปิด';
+const WEB_CODE_RE = /^[A-Z][A-Z0-9_]{1,19}$/, WEB_LINK_RE = /^https:\/\/[^\s"<>]{1,490}$/;
 const COL = { rank: 'ยศ', name: 'ชื่อ-สกุล', pos: 'ตำแหน่งงาน', idGov: 'ID Card ขรก.', idCit: 'ID Card ปชช.', birth: 'BIRTH DATE', role: 'Role', username: 'Username', salt: 'Salt', hash: 'hash', end: 'วันสิ้นสุดการใช้งาน' };
 // what a row must hold before a link can be made for it (Role, Username, Salt and hash are filled in by this system)
 const BASE = [['name', 'ชื่อ-สกุล'], ['pos', 'ตำแหน่งงาน'], ['idGov', 'ID Card ขรก.'], ['idCit', 'ID Card ปชช.'], ['birth', 'BIRTH DATE']];
@@ -80,6 +87,8 @@ const MSG = {
   waitGone: 'การขอเข้าใช้งานหมดเวลา ให้เข้าสู่ระบบใหม่',
   link: 'ลิงก์นี้ใช้ไม่ได้แล้ว อาจหมดอายุ ถูกใช้ไปแล้ว หรือถูกยกเลิก ให้ติดต่อ Admin เพื่อขอลิงก์ใหม่',
   admin: 'หน้านี้ใช้ได้เฉพาะผู้ที่มี Role Admin',
+  noWeb: 'บัญชีนี้ไม่มีสิทธิ์ใช้งานเว็บนี้ ให้ติดต่อ Admin',
+  webShut: 'เว็บนี้ปิดใช้งานอยู่ ให้ติดต่อ Admin',
 };
 
 /* ------------------------------ run from the editor ------------------------------ */
@@ -108,6 +117,13 @@ function setup() {
   if (!tk) tk = ss.insertSheet(OPT.tokenTab);
   head_(tk, TOKEN_HEAD, 'แท็บ ' + OPT.tokenTab);
   tk.getRange('E2:F').setNumberFormat(DT_FMT);
+  // ข้อ 1.14: the tab of webs, and the column of web access in the header row(s) of the people
+  let wl = ss.getSheetByName(OPT.webTab);
+  if (!wl) wl = ss.insertSheet(OPT.webTab);
+  head_(wl, WEB_HEAD, 'แท็บ ' + OPT.webTab);
+  wl.getRange('A:D').setNumberFormat('@');
+  const addedWebCol = webCol_(main);
+  if (addedWebCol) Logger.log('เพิ่มคอลัมน์ "' + WEB_COL + '" ที่คอลัมน์ ' + addedWebCol + ' ของแถวหัวคอลัมน์ในแท็บ ' + OPT.loginTab + ' แล้ว (ข้อ 1.14.5.2)');
   const log = SpreadsheetApp.openById(logId).getSheets()[0];
   head_(log, LOG_HEAD, 'ไฟล์ BACKLOG');
   log.getRange('A2:A').setNumberFormat(DT_FMT);
@@ -150,6 +166,8 @@ function setup() {
     if (missing_(p).length) incomplete.push(p.row);
   });
   Logger.log('ตั้งค่าเสร็จแล้ว: พบรายชื่อ ' + db.people.length + ' คน');
+  const legacy = db.people.filter(function (p) { return p.roleLegacy; }).map(function (p) { return p.row; });
+  if (legacy.length) Logger.log('แถวที่คอลัมน์ Role ยังเป็น Editor หรือ Viewer แบบเดิม ระบบถือเป็น User (ข้อ 1.14.4.3): ' + legacy.join(', '));
   Logger.log('Backup: คัดลอกแท็บ ' + OPT.loginTab + ' ไปไฟล์ BACKUP LOGIN DATABASE แท็บ ' + today_() + ' แล้ว และตั้ง Protect sheet ให้ทุกแท็บของไฟล์ Backup ทั้งสองไฟล์แล้ว');
   if (supers[0].role !== 'Admin') Logger.log('คำเตือน: แถวของ Admin หลักยังไม่มี Role "Admin" ในชีท ให้ใส่ก่อนออกลิงก์ครั้งแรก');
   if (dup.length) Logger.log('คำเตือน: Username ซ้ำกันที่แถว ' + dup.join(', ') + ' (บัญชีที่ซ้ำจะ Login ไม่ได้)');
@@ -230,10 +248,12 @@ function asError_(x) {
 const OPS = {
   'info': opInfo_, 'login': opLogin_, 'login.wait': opLoginWait_, 'login.cancel': opLoginCancel_, 'me': opMe_, 'ping': opPing_, 'session.deny': opDeny_, 'logout': opLogout_,
   'link.info': opLinkInfo_, 'link.use': opLinkUse_,
+  'web.enter': opWebEnter_,
   'admin.list': opAdminList_, 'admin.link': opAdminLink_, 'admin.role': opAdminRole_, 'admin.username': opAdminUsername_, 'admin.backupAck': opBackupAck_,
+  'admin.web': opAdminWeb_, 'admin.webList': opAdminWebList_,
 };
 // these change a sheet, so they run one at a time
-const WRITES = { 'link.info': 1, 'link.use': 1, 'admin.link': 1, 'admin.role': 1, 'admin.username': 1, 'admin.backupAck': 1 };
+const WRITES = { 'link.info': 1, 'link.use': 1, 'admin.link': 1, 'admin.role': 1, 'admin.username': 1, 'admin.backupAck': 1, 'admin.web': 1, 'admin.webList': 1 };
 const BUSY = 'ระบบกำลังทำรายการอื่นอยู่ ลองอีกครั้ง';
 
 function handle_(req) {
@@ -339,6 +359,7 @@ function parseDb_(values, tz) {
   const hr = values[head].map(norm_), col = {}, lost = [];
   Object.keys(COL).forEach(function (k) { col[k] = hr.indexOf(norm_(COL[k])); if (col[k] < 0) lost.push(COL[k]); });
   if (lost.length) throw err_('config_error', 'แท็บ ' + OPT.loginTab + ' ไม่มีคอลัมน์: ' + lost.join(', '));
+  col.web = hr.indexOf(norm_(WEB_COL));                                      // -1 until setup() has added it: nobody has a web yet
   const people = [], nameHead = norm_(COL.name);
   let group = '';
   for (let i = 0; i < values.length; i++) {
@@ -346,10 +367,13 @@ function parseDb_(values, tz) {
     if (norm_(name) === nameHead) continue;                                  // a header row
     if (!name) { const filled = r.map(str_).filter(String); if (filled.length === 1) group = filled[0]; continue; }
     const endRaw = r[col.end], end = toIso_(endRaw, tz), roleText = norm_(r[col.role]);
+    // ข้อ 1.14.4.3: Editor or Viewer written there before is read as User, and left as it is in the sheet
+    const legacy = roleText === 'editor' || roleText === 'viewer';
     people.push({
       row: i + 1, group: group, rank: str_(r[col.rank]), name: name, pos: str_(r[col.pos]),
       idGov: digits_(r[col.idGov]), idCit: digits_(r[col.idCit]), birth: toIso_(r[col.birth], tz),
-      role: OPT.roles.filter(function (x) { return x.toLowerCase() === roleText; })[0] || '',
+      role: legacy ? 'User' : OPT.roles.filter(function (x) { return x.toLowerCase() === roleText; })[0] || '', roleLegacy: legacy,
+      web: col.web >= 0 ? webParse_(r[col.web]) : {},
       username: str_(r[col.username]), salt: str_(r[col.salt]), hash: str_(r[col.hash]),
       end: end, endBad: !end && str_(endRaw) !== '',                          // something is written there that is not a date
     });
@@ -386,8 +410,9 @@ function setEnd_(ctx, p, iso) {
 //   the main administrator: everything, except changing his own role; he has no end date
 //   other administrators:   nothing on the main administrator's account, nothing on another administrator's;
 //                           they cannot change any Username (their own included) or make anyone an Admin
+//   web access (ข้อ 1.14.2.4): the main administrator only, for every account but his own (he has every web)
 function perm_(ctx, a, t) {
-  const o = { link: false, user: false, role: false, admin: false, end: false, why: '' }, aSuper = isSuper_(ctx, a), self = a === t;
+  const o = { link: false, user: false, role: false, roleSwap: false, admin: false, end: false, web: false, why: '' }, aSuper = isSuper_(ctx, a), self = a === t;
   if (!isAdmin_(a)) { o.why = MSG.admin; return o; }
   if (!aSuper && isSuper_(ctx, t)) { o.why = 'บัญชี ' + superName_(ctx) + ' แก้ไขได้เฉพาะเจ้าของบัญชี Admin คนอื่นเปลี่ยน Role แก้ Username หรือ Reset Password ให้ไม่ได้'; return o; }
   if (!aSuper && t.role === 'Admin' && !self) { o.why = 'Admin ด้วยกันเปลี่ยน Role หรือ Reset Password ให้กันไม่ได้ ต้องให้ ' + superName_(ctx) + ' ดำเนินการ'; return o; }
@@ -395,8 +420,71 @@ function perm_(ctx, a, t) {
   o.user = aSuper;
   o.role = !(aSuper && self);
   o.admin = aSuper && !self;
+  o.roleSwap = aSuper ? !self : self;             // another administrator may only lower his own Role to User (ข้อ 1.14.4.5)
   o.end = !isSuper_(ctx, t);
+  o.web = aSuper && !self;
   return o;
+}
+
+/* ------------------------------ webs and web access (ข้อ 1.14) ------------------------------
+   The webs are the rows of the WEB LIST tab: code, name, link, state. A code never changes; a web is closed, never
+   deleted. Each person's access is one cell, "WEB1=Editor; WEB2=Viewer". The main administrator has every open web as
+   Admin. A closed web lets nobody in, and the access written for it is kept. */
+
+// "WEB1=Editor; WEB2=Viewer" → { WEB1: 'Editor', WEB2: 'Viewer' }; anything else in the cell is left out
+function webParse_(v) {
+  const o = {};
+  str_(v).split(/[;,\n]/).forEach(function (part) {
+    const m = /^\s*([A-Za-z][A-Za-z0-9_]{1,19})\s*=\s*([A-Za-z]+)\s*$/.exec(part);
+    if (!m) return;
+    const role = OPT.webRoles.filter(function (r) { return r.toLowerCase() === m[2].toLowerCase(); })[0];
+    if (role) o[m[1].toUpperCase()] = role;
+  });
+  return o;
+}
+function webText_(o) { return Object.keys(o).sort().map(function (k) { return k + '=' + o[k]; }).join('; '); }
+function webs_(ctx) {
+  if (ctx.webs) return ctx.webs;
+  const sh = db_(ctx).ss.getSheetByName(OPT.webTab), list = [], seen = {};
+  if (sh) sh.getDataRange().getValues().slice(1).forEach(function (r, i) {
+    const code = str_(r[0]).toUpperCase();
+    if (!WEB_CODE_RE.test(code) || seen[code]) return;                        // a row without a proper code, or a code twice: the first one counts
+    seen[code] = true;
+    list.push({ row: i + 2, code: code, name: str_(r[1]) || code, link: str_(r[2]), open: str_(r[3]) !== WEB_SHUT });
+  });
+  ctx.webs = { sh: sh, list: list };
+  return ctx.webs;
+}
+function webOf_(ctx, code) { const c = str_(code).toUpperCase(); return webs_(ctx).list.filter(function (w) { return w.code === c; })[0] || null; }
+// the Role of this person in this web as written ('' none); the main administrator is Admin everywhere
+function webRole_(ctx, p, code) { return isSuper_(ctx, p) ? 'Admin' : (p.web[code] || ''); }
+// the webs this person can enter now, for the page shown after login (ข้อ 1.14.3.3)
+function myWebs_(ctx, p) {
+  return webs_(ctx).list.filter(function (w) { return w.open && webRole_(ctx, p, w.code); }).map(function (w) { return { code: w.code, name: w.name, link: w.link, role: webRole_(ctx, p, w.code) }; });
+}
+// For a page of a web, and for every request of a web that reads or writes its data: who is asking, and with which
+// Role in that web. Refused unless the web is open and the account has access to it (ข้อ 1.14.3.1, 1.14.3.5).
+function webAuth_(ctx, req, code) {
+  const p = auth_(ctx, req), w = webOf_(ctx, code);
+  if (!w) throw err_('no_web', MSG.noWeb);
+  if (!w.open) throw err_('web_closed', MSG.webShut);
+  const role = webRole_(ctx, p, w.code);
+  if (!role) throw err_('no_web', MSG.noWeb);
+  return { p: p, web: w, role: role };
+}
+// setup(): the column of web access, added at the end of the header row (and of every repeated header row) when it
+// is not there. Returns the column letter it was put in, or '' when it was there already.
+function webCol_(sh) {
+  const values = sh.getDataRange().getValues(), nameHead = norm_(COL.name), userHead = norm_(COL.username);
+  const heads = []; values.forEach(function (r, i) { const n = r.map(norm_); if (n.indexOf(nameHead) >= 0 && n.indexOf(userHead) >= 0) heads.push(i); });
+  if (!heads.length || values[heads[0]].map(norm_).indexOf(norm_(WEB_COL)) >= 0) return '';
+  // the first column that is empty in every row, to the right of the header
+  let c = values[heads[0]].reduce(function (last, v, j) { return str_(v) ? j : last; }, -1) + 1;
+  while (values.some(function (r) { return str_(r[c]); })) c++;
+  if (c + 1 > sh.getMaxColumns()) sh.insertColumnsAfter(sh.getMaxColumns(), c + 1 - sh.getMaxColumns());
+  heads.forEach(function (i) { sh.getRange(i + 1, c + 1).setValue(WEB_COL); });
+  let letter = '', n = c + 1; while (n > 0) { letter = String.fromCharCode(65 + (n - 1) % 26) + letter; n = Math.floor((n - 1) / 26); }
+  return letter;
 }
 
 /* ------------------------------ sessions ------------------------------
@@ -515,7 +603,7 @@ function device_(ctx, s) {
   if (st && st.s === s.s && st.q && st.q.seen) ctx.take = { rid: rid_(ctx, st.q.r), until: st.q.seen + OPT.takeoverSeconds * 1000 };
 }
 function admin_(ctx, req) { const a = auth_(ctx, req); if (!isAdmin_(a)) throw err_('forbidden', MSG.admin); return a; }
-function user_(ctx, p) { return { rank: p.rank, name: p.name, pos: p.pos, username: p.username, role: p.role, isSuper: isSuper_(ctx, p) }; }
+function user_(ctx, p) { return { rank: p.rank, name: p.name, pos: p.pos, username: p.username, role: p.role, isSuper: isSuper_(ctx, p), webs: myWebs_(ctx, p) }; }
 
 // What the page uses to point at a row. It carries no ID number, and stops working when the row moves or changes owner.
 function ref_(ctx, p) { return p.row + '.' + sign_(ctx, 'row|' + p.row + '|' + p.idGov + '|' + p.name).slice(0, 20); }
@@ -696,13 +784,17 @@ function opLogout_(ctx, req) {
 // The list for the administrator page. Rank, name, position, Username and Role only, plus what the page needs to know
 // about each row without seeing it: whether a password is set, which required cells are empty, the end date.
 function opAdminList_(ctx, req) {
-  const a = admin_(ctx, req);
+  const a = admin_(ctx, req), sup = isSuper_(ctx, a);
   return {
     me: user_(ctx, a), mainAdmin: superName_(ctx), today: today_(), expiresAt: ctx.exp,
+    // ข้อ 1.14.2.4.1: the list of webs and everyone's web access go to the main administrator only
+    webs: sup ? webs_(ctx).list.map(function (w) { return { code: w.code, name: w.name, link: w.link, open: w.open }; }) : undefined,
+    webColumn: sup ? db_(ctx).col.web >= 0 : undefined,
     backupEvents: bkEvents_(ctx).map(function (e) { return { at: e.t, event: e.e, text: e.x }; }),        // ข้อ 1.13.7.2: shown until the main administrator acknowledges
     people: db_(ctx).people.map(function (p) {
-      const sup = isSuper_(ctx, p);
-      return { ref: ref_(ctx, p), group: p.group, rank: p.rank, name: p.name, pos: p.pos, username: p.username, role: p.role, hasPw: !!p.hash, end: sup ? '' : p.end, endBad: !sup && p.endBad, missing: missing_(p), isSuper: sup, isMe: p === a };
+      const sp = isSuper_(ctx, p), o = { ref: ref_(ctx, p), group: p.group, rank: p.rank, name: p.name, pos: p.pos, username: p.username, role: p.role, hasPw: !!p.hash, end: sp ? '' : p.end, endBad: !sp && p.endBad, missing: missing_(p), isSuper: sp, isMe: p === a };
+      if (sup) o.web = Object.assign({}, p.web);
+      return o;
     }),
   };
 }
@@ -778,6 +870,83 @@ function opAdminRole_(ctx, req) {
   if (note) setEnd_(ctx, t, end);
   backlog_(ctx, { action: 'CHANGE_ROLE', event: role !== t.role ? 'ROLE_CHANGED' : 'END_DATE_CHANGED', p: t, role: role, roleOld: role !== t.role ? t.role : '', admin: a.username, note: note });
   return { role: role, end: end };
+}
+
+// ข้อ 1.14.2: web access of one account, saved at once (no link, no new password). The main administrator only.
+// req.web: { CODE: 'Admin' | 'Editor' | 'Viewer' | '' } for the webs that change. One BACKLOG row for each web.
+function opAdminWeb_(ctx, req) {
+  const a = admin_(ctx, req), t = byRef_(ctx, req.ref), o = perm_(ctx, a, t);
+  if (o.why) throw err_('forbidden', o.why);
+  if (!o.web) throw err_('forbidden', isSuper_(ctx, a) ? 'Admin หลักเข้าได้ทุกเว็บในฐานะ Admin อยู่แล้ว' : 'กำหนดสิทธิ์เว็บได้เฉพาะ ' + superName_(ctx));
+  if (db_(ctx).col.web < 0) throw err_('config_error', 'แท็บ ' + OPT.loginTab + ' ยังไม่มีคอลัมน์ "' + WEB_COL + '" ให้เจ้าของระบบรันฟังก์ชัน setup อีกครั้ง');
+  const want = req.web && typeof req.web === 'object' ? req.web : {}, next = Object.assign({}, t.web), changes = [];
+  Object.keys(want).forEach(function (k) {
+    const w = webOf_(ctx, k);
+    if (!w) throw err_('bad_web', 'ไม่พบเว็บรหัส ' + str_(k) + ' ในรายชื่อเว็บ ให้โหลดหน้านี้ใหม่');
+    const v = str_(want[k]), role = v ? OPT.webRoles.filter(function (r) { return r === v; })[0] : '';
+    if (v && !role) throw err_('bad_role', 'Role ในเว็บต้องเป็น Admin, Editor หรือ Viewer');
+    const old = t.web[w.code] || '';
+    if (role === old) return;
+    if (role) next[w.code] = role; else delete next[w.code];
+    changes.push({ w: w, old: old, role: role });
+  });
+  if (!changes.length) throw err_('no_change', 'ยังไม่มีการเปลี่ยนแปลง');
+  setCell_(ctx, t, 'web', webText_(next));
+  changes.forEach(function (c) {
+    backlog_(ctx, { action: 'WEB_ACCESS', event: 'WEB_ACCESS_CHANGED', p: t, admin: a.username, note: c.w.name + ' (' + c.w.code + '): ' + (c.old || 'ไม่มีสิทธิ์') + ' → ' + (c.role || 'ไม่มีสิทธิ์') });
+  });
+  return { web: next, changed: changes.length };
+}
+
+// ข้อ 1.14.7: the list of webs. The main administrator only. act: add, edit (name and link), close, open. A code
+// never changes and a web is never deleted. One BACKLOG row each time; the tab goes into the daily backup.
+function opAdminWebList_(ctx, req) {
+  const a = admin_(ctx, req);
+  if (!isSuper_(ctx, a)) throw err_('forbidden', 'จัดการรายชื่อเว็บได้เฉพาะ ' + superName_(ctx));
+  const W = webs_(ctx);
+  if (!W.sh) throw err_('config_error', 'ไม่พบแท็บ "' + OPT.webTab + '" ให้เจ้าของระบบรันฟังก์ชัน setup อีกครั้ง');
+  const act = str_(req.act), code = str_(req.code).toUpperCase();
+  const name = str_(req.name), link = str_(req.link);
+  const checkText = function () {
+    if (!name || name.length > 100) throw err_('bad_web', 'กรอกชื่อเว็บ ยาวไม่เกิน 100 ตัวอักษร');
+    if (/^[=+\-@]/.test(name)) throw err_('bad_web', 'ชื่อเว็บห้ามขึ้นต้นด้วย = + - หรือ @');
+    if (!WEB_LINK_RE.test(link)) throw err_('bad_web', 'ลิงก์ต้องขึ้นต้นด้วย https:// และไม่มีช่องว่าง');
+  };
+  let w = null, event = '', note = '';
+  if (act === 'add') {
+    if (!WEB_CODE_RE.test(code)) throw err_('bad_web', 'รหัสเว็บใช้อังกฤษตัวใหญ่ ตัวเลข หรือขีดล่าง ยาว 2–20 ตัว และขึ้นต้นด้วยตัวอักษร');
+    if (webOf_(ctx, code)) throw err_('bad_web', 'รหัสเว็บ ' + code + ' มีอยู่แล้ว ต้องใช้รหัสอื่น');
+    checkText();
+    W.sh.appendRow([code, name, link, WEB_OPEN]);
+    event = 'WEB_ADDED'; note = code + ': เพิ่มเว็บ "' + name + '" ' + link;
+  } else {
+    w = webOf_(ctx, code);
+    if (!w) throw err_('bad_web', 'ไม่พบเว็บรหัส ' + code + ' ให้โหลดหน้านี้ใหม่');
+    if (act === 'edit') {
+      checkText();
+      const ch = [];
+      if (name !== w.name) ch.push('ชื่อ "' + w.name + '" → "' + name + '"');
+      if (link !== w.link) ch.push('ลิงก์ ' + w.link + ' → ' + link);
+      if (!ch.length) throw err_('no_change', 'ยังไม่มีการเปลี่ยนแปลง');
+      W.sh.getRange(w.row, 2, 1, 2).setValues([[name, link]]);
+      event = 'WEB_CHANGED'; note = w.code + ': ' + ch.join(' · ');
+    } else if (act === 'close' || act === 'open') {
+      if (w.open === (act === 'open')) throw err_('no_change', act === 'open' ? 'เว็บนี้เปิดอยู่แล้ว' : 'เว็บนี้ปิดอยู่แล้ว');
+      W.sh.getRange(w.row, 4).setValue(act === 'open' ? WEB_OPEN : WEB_SHUT);
+      event = act === 'open' ? 'WEB_OPENED' : 'WEB_CLOSED';
+      note = w.code + ': ' + (act === 'open' ? 'เปิดเว็บ สิทธิ์เดิมกลับมาใช้ได้' : 'ปิดเว็บ ไม่มีใครเข้าได้ สิทธิ์เดิมยังเก็บไว้');
+    } else throw err_('bad_request', 'unknown act');
+  }
+  ctx.dbDirty = true;                                                   // ข้อ 1.14.7.8: the WEB LIST tab goes into today's backup
+  backlog_(ctx, { action: 'WEB_LIST', event: event, admin: a.username, note: note });
+  ctx.webs = null;
+  return { webs: webs_(ctx).list.map(function (x) { return { code: x.code, name: x.name, link: x.link, open: x.open }; }) };
+}
+
+// A page of a web asks: may this account use web `web`, and as what? (ข้อ 1.14.3). Answers who it is and the Role.
+function opWebEnter_(ctx, req) {
+  const r = webAuth_(ctx, req, req.web);
+  return { user: user_(ctx, r.p), expiresAt: ctx.exp, web: { code: r.web.code, name: r.web.name, link: r.web.link, role: r.role } };
 }
 
 function opLinkInfo_(ctx, req) {
@@ -881,6 +1050,18 @@ function backupDb_(ctx) {
     }
     made.setName(name);
     b.dbSs = ss;
+    // ข้อ 1.14.7.8: the WEB LIST tab goes into the same daily tab, two rows below the people
+    try {
+      const wl = db_(ctx).ss.getSheetByName(OPT.webTab);
+      if (wl && wl.getLastRow()) {
+        const wv = wl.getRange(1, 1, wl.getLastRow(), WEB_HEAD.length).getValues().map(function (r) { return r.map(str_); }), at = made.getLastRow() + 2;
+        const need = at + wv.length - made.getMaxRows();
+        if (need > 0) made.insertRowsAfter(made.getMaxRows(), need);
+        if (made.getMaxColumns() < WEB_HEAD.length) made.insertColumnsAfter(made.getMaxColumns(), WEB_HEAD.length - made.getMaxColumns());
+        made.getRange(at, 1).setValue('สำเนาแท็บ ' + OPT.webTab);
+        made.getRange(at + 1, 1, wv.length, WEB_HEAD.length).setNumberFormat('@').setValues(wv);
+      }
+    } catch (x) { bkFail_(ctx, 'BACKUP LOGIN DATABASE (แท็บ ' + OPT.webTab + ')', x); }
     try {                                                            // ข้อ 1.13.1.1: no empty rows or columns left over
       const rows = Math.max(1, made.getLastRow()), cols = Math.max(1, made.getLastColumn()), mr = made.getMaxRows(), mc = made.getMaxColumns();
       if (mr > rows) made.deleteRows(rows + 1, mr - rows);

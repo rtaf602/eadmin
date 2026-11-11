@@ -14,7 +14,7 @@ const login = (u, pw, n, birth) => { const r = login1(u, pw, n, birth); if (!r.w
 const ping = (session) => post('ping', { session }), me = (session) => post('me', { session });
 const list = (session) => post('admin.list', { session });
 const person = (session, key) => list(session).people.find((p) => p.username === key || p.name === key);
-const link = (session, key, extra) => { const p = person(session, key); return post('admin.link', Object.assign({ session, ref: p.ref, role: p.role || 'Viewer', end: p.end }, extra || {})); };
+const link = (session, key, extra) => { const p = person(session, key); return post('admin.link', Object.assign({ session, ref: p.ref, role: p.role || 'User', end: p.end }, extra || {})); };
 const rename = (session, key, username) => post('admin.username', { session, ref: person(session, key).ref, username });
 const role = (session, key, extra) => { const p = person(session, key); return post('admin.role', Object.assign({ session, ref: p.ref, role: p.role, end: p.end }, extra || {})); };
 const use = (token, password, birth) => post('link.use', { token, password, birth: birth || BIRTH });
@@ -79,7 +79,7 @@ const sameMsg = [login('chan_t', 'Wrong-Password-00', 8), post('login', { userna
 check('wrong password, wrong card number, wrong birth date, unknown user: one and the same answer', sameMsg.every((r) => code(r) === 'login_failed' && r.error.message === sameMsg[0].error.message), sameMsg.map(code));
 check('a failed login is slowed down', sim.sleeps >= 4, sim.sleeps);
 const inChan = login(' CHAN_T ', PW.chan, 8);
-check('login: Username is not case sensitive; the answer carries rank, name, position, Username, Role only', inChan.ok && JSON.stringify(Object.keys(inChan.user).sort()) === JSON.stringify(['isSuper', 'name', 'pos', 'rank', 'role', 'username']) && inChan.user.role === 'Admin' && inChan.user.isSuper === true, inChan);
+check('login: Username is not case sensitive; the answer carries rank, name, position, Username, Role and the webs only', inChan.ok && JSON.stringify(Object.keys(inChan.user).sort()) === JSON.stringify(['isSuper', 'name', 'pos', 'rank', 'role', 'username', 'webs']) && inChan.user.role === 'Admin' && inChan.user.isSuper === true, inChan);
 check('the session lasts one hour (ข้อ 1.10)', Math.abs(inChan.expiresAt - Date.now() - 3600000) < 5000);
 let S = inChan.session; const W = login('weera_t', PW.weera, 6).session;
 check('me: with the session', post('me', { session: S }).user.username === 'chan_t');
@@ -91,7 +91,7 @@ check('a session with a rewritten body is refused', code(post('me', { session: f
 /* ---------- what the administrator page receives ---------- */
 const L = list(S);
 check('admin.list: 12 people, with their groups', L.ok && L.people.length === 12 && L.people.find((p) => p.username === 'thana_t').group === 'นักบิน A319 / A320' && L.people.find((p) => p.username === 'kitti_s').group === 'เจ้าหน้าที่สื่อสาร' && L.people[0].group === 'นักบินผู้บังคับบัญชา', L.people && L.people.map((p) => p.group));
-check('admin.list: each person carries exactly the agreed fields', L.people.every((p) => JSON.stringify(Object.keys(p).sort()) === JSON.stringify(['end', 'endBad', 'group', 'hasPw', 'isMe', 'isSuper', 'missing', 'name', 'pos', 'rank', 'ref', 'role', 'username'])));
+check('admin.list: each person carries exactly the agreed fields', L.people.every((p) => JSON.stringify(Object.keys(p).sort()) === JSON.stringify(['end', 'endBad', 'group', 'hasPw', 'isMe', 'isSuper', 'missing', 'name', 'pos', 'rank', 'ref', 'role', 'username', 'web'])));
 const wire = JSON.stringify(L);
 check('admin.list: no ID card number, date of birth, salt or hash leaves the back end', !PEOPLE.some((p) => p.n && (wire.includes(String(idGov(p.n))) || wire.includes(String(idCit(p.n))))) && !/1987-01-01|Jan-1987|\/2530|"birth"/.test(wire) && !wire.includes(salt) && !wire.includes(hash.split('$')[2]) && !/pbkdf2/.test(wire));
 check('admin.list: missing cells are named, not shown', JSON.stringify(L.people.find((p) => p.username === 'methi_j').missing) === JSON.stringify(['BIRTH DATE']) && L.people.find((p) => p.username === 'pakorn_t').missing.length === 0);
@@ -102,16 +102,16 @@ const inside = (tok) => JSON.parse(Buffer.from(tok.split('.')[0], 'base64url').t
 check('the session a browser keeps holds no ID card number: only a mark of it (ข้อ 1.6)', JSON.stringify(Object.keys(inside(S)).sort()) === JSON.stringify(['e', 'i', 'p', 's']) && /^[0-9a-f]{24}$/.test(inside(S).i) && !PEOPLE.some((p) => p.n && JSON.stringify(inside(S)).includes(String(idGov(p.n)))), inside(S));
 
 /* ---------- the main administrator ---------- */
-const g1 = link(S, 'phum_s', { role: 'Viewer' }); raws.push(g1.token);
-check('main admin: Generate One Time Link writes the Role now', g1.ok && g1.action === 'CREATE' && g1.username === 'phum_s' && cell('phum_s', 10) === 'Viewer' && Math.abs(g1.expiresAt - Date.now() - 30 * 60000) < 5000, g1);
-check('BACKLOG: who made it, for whom, with which Role', lastLog()[2] === 'LINK_GENERATED' && lastLog()[10] === 'chan_t' && lastLog()[5] === 'phum_s' && lastLog()[8] === 'Viewer' && lastLog()[3] === 'นักบิน A319 / A320' && lastLog()[4] === 'น.ต. ภูมิ สาธิตพงศ์' && isD(lastLog()[12]), lastLog());
-check('the new user sets a password and logs in as Viewer', use(g1.token, PW.phum).ok && login('phum_s', PW.phum, 5).user.role === 'Viewer');
+const g1 = link(S, 'phum_s', { role: 'User' }); raws.push(g1.token);
+check('main admin: Generate One Time Link writes the Role now', g1.ok && g1.action === 'CREATE' && g1.username === 'phum_s' && cell('phum_s', 10) === 'User' && Math.abs(g1.expiresAt - Date.now() - 30 * 60000) < 5000, g1);
+check('BACKLOG: who made it, for whom, with which Role', lastLog()[2] === 'LINK_GENERATED' && lastLog()[10] === 'chan_t' && lastLog()[5] === 'phum_s' && lastLog()[8] === 'User' && lastLog()[3] === 'นักบิน A319 / A320' && lastLog()[4] === 'น.ต. ภูมิ สาธิตพงศ์' && isD(lastLog()[12]), lastLog());
+check('the new user sets a password and logs in as User', use(g1.token, PW.phum).ok && login('phum_s', PW.phum, 5).user.role === 'User');
 let P = login('phum_s', PW.phum, 5).session;
 check('a Viewer cannot use any administrator call', ['admin.list', 'admin.link', 'admin.role', 'admin.username', 'admin.backupAck'].every((op) => code(post(op, { session: P, ref: L.people[0].ref, role: 'Admin', username: 'new_name' })) === 'forbidden'));
 check('incomplete row (no date of birth): no link', code(link(S, 'methi_j')) === 'incomplete');
 
 /* ---------- เปลี่ยน Username: a button of its own (ข้อ 1.2.1) ---------- */
-const gI = link(S, 'prasert_j', { username: 'sneaky_name', role: 'Editor' }); raws.push(gI.token);
+const gI = link(S, 'prasert_j', { username: 'sneaky_name', role: 'Admin' }); raws.push(gI.token);
 check('Generate One Time Link no longer changes a Username: one sent along is ignored', gI.ok && gI.username === 'prasert_j' && cell('prasert_j', 11) === 'prasert_j' && lastLog()[6] === '' && lastLog()[7] === '', [gI, lastLog()]);
 const linksBefore = tokens().length, before = ['prasert_j'].map((k) => [cell(k, 10), cell(k, 12), cell(k, 13), cell(k, 14)]);
 check('เปลี่ยน Username: a clash with someone else is refused', code(rename(S, 'prasert_j', 'thana_t')) === 'bad_username' && /ธนา/.test(rename(S, 'prasert_j', 'THANA_T').error.message));
@@ -124,30 +124,32 @@ check('…the link of that account that was not used yet stops working, and BACK
 check('…Role, Salt, hash and end date are left as they were (ข้อ 1.2.1.5)', JSON.stringify([cell('prasert_new', 10), cell('prasert_new', 12), cell('prasert_new', 13), cell('prasert_new', 14)]) === JSON.stringify(before[0]));
 
 /* ---------- another administrator ---------- */
-check('other admin: nothing on the main administrator (link, role)', code(link(W, 'chan_t')) === 'forbidden' && code(role(W, 'chan_t', { role: 'Viewer' })) === 'forbidden' && cell('chan_t', 10) === 'Admin');
-check('other admin: nothing on another administrator (link, role)', code(link(W, 'anan_s')) === 'forbidden' && code(role(W, 'anan_s', { role: 'Viewer' })) === 'forbidden');
+check('other admin: nothing on the main administrator (link, role)', code(link(W, 'chan_t')) === 'forbidden' && code(role(W, 'chan_t', { role: 'User' })) === 'forbidden' && cell('chan_t', 10) === 'Admin');
+check('other admin: nothing on another administrator (link, role)', code(link(W, 'anan_s')) === 'forbidden' && code(role(W, 'anan_s', { role: 'User' })) === 'forbidden');
 check('other admin: cannot make anyone an Admin', code(link(W, 'krit_s', { role: 'Admin' })) === 'forbidden' && cell('krit_s', 10) === '');
 check('other admin: an account without a Username has to wait for the main administrator', code(link(W, 'วิทยา ทดสอบดี', { username: 'wittaya_t' })) === 'bad_username' && code(rename(W, 'วิทยา ทดสอบดี', 'wittaya_t')) === 'forbidden' && cell('วิทยา ทดสอบดี', 11) === '');
 check('other admin: cannot change any Username, his own included (ข้อ 1.0.2)', code(rename(W, 'krit_s', 'krit_new')) === 'forbidden' && code(rename(W, 'weera_t', 'weera_new')) === 'forbidden' && code(rename(W, 'chan_t', 'chan_new')) === 'forbidden' && cell('krit_s', 11) === 'krit_s' && cell('weera_t', 11) === 'weera_t' && /เฉพาะ chan_t/.test(rename(W, 'krit_s', 'krit_new').error.message));
-const g3 = link(W, 'krit_s', { role: 'Editor', username: 'renamed_by_w' }); raws.push(g3.token);
-check('other admin: can give Editor; a Username sent along is ignored', g3.ok && g3.username === 'krit_s' && cell('krit_s', 11) === 'krit_s' && cell('krit_s', 10) === 'Editor' && lastLog()[6] === '' && lastLog()[7] === '', [g3, lastLog()]);
-const g3b = link(W, 'krit_s', { role: 'Editor' }); raws.push(g3b.token);
+const g3 = link(W, 'krit_s', { role: 'User', username: 'renamed_by_w' }); raws.push(g3.token);
+check('other admin: can give User; a Username sent along is ignored', g3.ok && g3.username === 'krit_s' && cell('krit_s', 11) === 'krit_s' && cell('krit_s', 10) === 'User' && lastLog()[6] === '' && lastLog()[7] === '', [g3, lastLog()]);
+const g3b = link(W, 'krit_s', { role: 'User' }); raws.push(g3b.token);
 check('a new link replaces the one before it', g3b.ok && code(post('link.info', { token: g3.token })) === 'link_invalid' && post('link.info', { token: g3b.token }).ok && tokens().some((r) => r[6] === 'REVOKED') && log().some((r) => r[2] === 'LINK_REVOKED' && r[10] === 'weera_t'));
-check('…and the newer one works', use(g3b.token, PW.krit).ok && login('krit_s', PW.krit, 1).user.role === 'Editor');
-const gT = link(S, 'thana_t', { role: 'Editor' }); raws.push(gT.token); use(gT.token, PW.thana);
-check('other admin: CHANGE ROLE of an ordinary account, at once, no link', role(W, 'thana_t', { role: 'Viewer' }).ok && cell('thana_t', 10) === 'Viewer' && lastLog()[1] === 'CHANGE_ROLE' && lastLog()[2] === 'ROLE_CHANGED' && lastLog()[8] === 'Viewer' && lastLog()[9] === 'Editor' && lastLog()[11] === '', lastLog());
-check('other admin: CHANGE ROLE to Admin is refused', code(role(W, 'thana_t', { role: 'Admin' })) === 'forbidden' && cell('thana_t', 10) === 'Viewer');
-check('CHANGE ROLE without a change, with a bad role, or for an account without a password', code(role(W, 'thana_t')) === 'no_change' && code(role(W, 'thana_t', { role: 'Boss' })) === 'bad_role' && code(role(S, 'somchai_t', { role: 'Viewer' })) === 'no_password');
+check('…and the newer one works', use(g3b.token, PW.krit).ok && login('krit_s', PW.krit, 1).user.role === 'User');
+const gT = link(S, 'thana_t', { role: 'User' }); raws.push(gT.token); use(gT.token, PW.thana);
+check('1.14.4.6 other admin: the end date of a User account, at once, no link; the Role stays User', role(W, 'thana_t', { role: 'User', end: '2099-12-31' }).ok && cell('thana_t', 10) === 'User' && lastLog()[1] === 'CHANGE_ROLE' && lastLog()[2] === 'END_DATE_CHANGED' && lastLog()[10] === 'weera_t' && lastLog()[11] === '', lastLog());
+check('other admin: CHANGE ROLE to Admin is refused', code(role(W, 'thana_t', { role: 'Admin' })) === 'forbidden' && cell('thana_t', 10) === 'User');
+check('1.14.4.1 the old Role names are refused now', code(role(S, 'thana_t', { role: 'Editor' })) === 'bad_role' && code(link(S, 'thana_t', { role: 'Viewer' })) === 'bad_role' && cell('thana_t', 10) === 'User');
+role(W, 'thana_t', { role: 'User', end: '' });
+check('CHANGE ROLE without a change, with a bad role, or for an account without a password', code(role(W, 'thana_t')) === 'no_change' && code(role(W, 'thana_t', { role: 'Boss' })) === 'bad_role' && code(role(S, 'somchai_t', { role: 'User' })) === 'no_password');
 const gW = link(W, 'weera_t'); raws.push(gW.token);
 check('other admin: may reset his own password; his Role stays', gW.ok && gW.action === 'RESET' && cell('weera_t', 10) === 'Admin');
-check('other admin: may lower his own Role, and then is no administrator any more', role(W, 'weera_t', { role: 'Viewer' }).ok && code(list(W)) === 'forbidden' && post('me', { session: W }).user.role === 'Viewer');
+check('other admin: may lower his own Role, and then is no administrator any more', role(W, 'weera_t', { role: 'User' }).ok && code(list(W)) === 'forbidden' && post('me', { session: W }).user.role === 'User');
 check('main admin gives the Role back; it takes effect on the next request', role(S, 'weera_t', { role: 'Admin' }).ok && list(W).ok);
 
 /* ---------- the main administrator's own account ---------- */
-check('main admin: cannot change his own Role', code(role(S, 'chan_t', { role: 'Viewer' })) === 'no_change' && cell('chan_t', 10) === 'Admin');
-const gS = link(S, 'chan_t', { role: 'Viewer', end: '2020-01-01' }); raws.push(gS.token);
+check('main admin: cannot change his own Role', code(role(S, 'chan_t', { role: 'User' })) === 'no_change' && cell('chan_t', 10) === 'Admin');
+const gS = link(S, 'chan_t', { role: 'User', end: '2020-01-01' }); raws.push(gS.token);
 check('main admin: may reset his own password; a Role or end date sent along is ignored', gS.ok && gS.action === 'RESET' && gS.role === 'Admin' && cell('chan_t', 10) === 'Admin' && cell('chan_t', 14) === '');
-check('an account without a Username: no link for the main administrator either, until one is saved (ข้อ 1.2.1.3)', code(link(S, 'วิทยา ทดสอบดี', { role: 'Viewer' })) === 'bad_username' && /บันทึก Username ก่อน/.test(link(S, 'วิทยา ทดสอบดี', { role: 'Viewer' }).error.message));
+check('an account without a Username: no link for the main administrator either, until one is saved (ข้อ 1.2.1.3)', code(link(S, 'วิทยา ทดสอบดี', { role: 'User' })) === 'bad_username' && /บันทึก Username ก่อน/.test(link(S, 'วิทยา ทดสอบดี', { role: 'User' }).error.message));
 check('main admin: may give a Username to an account that has none, and then make an Admin', rename(S, 'วิทยา ทดสอบดี', 'wittaya_t').ok && lastLog()[6] === '' && lastLog()[7] === 'wittaya_t' && /ครั้งแรก/.test(lastLog()[13]) && link(S, 'wittaya_t', { role: 'Admin' }).ok && cell('wittaya_t', 10) === 'Admin');
 
 /* ---------- end date ---------- */
@@ -176,7 +178,7 @@ check('…the old password stops, the new one works', code(login('phum_s', PW.ph
 check('…and a new salt was used', lastLog()[1] === 'RESET' && lastLog()[2] === 'PASSWORD_SET');
 
 /* ---------- links that run out ---------- */
-const gK = link(S, 'kitti_s', { role: 'Viewer' }); raws.push(gK.token);
+const gK = link(S, 'kitti_s', { role: 'User' }); raws.push(gK.token);
 tokens().find((r) => r[2] === 'kitti_s' && r[6] === false)[5] = new Date(Date.now() - 1000);
 check('a link past its 30 minutes: refused, marked EXPIRED, logged', code(post('link.info', { token: gK.token })) === 'link_invalid' && code(use(gK.token, 'Some-Password-07')) === 'link_invalid' && tokens().some((r) => r[2] === 'kitti_s' && r[6] === 'EXPIRED') && log().filter((r) => r[2] === 'LINK_EXPIRED' && r[5] === 'kitti_s').length === 1, tokens().filter((r) => r[2] === 'kitti_s'));
 const gK2 = link(S, 'kitti_s'); raws.push(gK2.token);
@@ -204,15 +206,15 @@ check('two rows with one ID card number: neither can log in', code(login('krit_s
 rowOf(sim, 'krit_s').cells[7] = keepId; sim.cache.clear();
 check('…and both can again once the sheet is put right', login('krit_s', PW.krit, 1).ok && login('thana_t', PW.thana, 3).ok);
 const ref = person(S, 'kitti_s').ref;
-check('a made-up or altered row reference is refused', code(post('admin.link', { session: S, ref: ref.replace(/^\d+/, '5'), role: 'Viewer' })) === 'stale' && code(post('admin.link', { session: S, ref: '5', role: 'Viewer' })) === 'stale');
+check('a made-up or altered row reference is refused', code(post('admin.link', { session: S, ref: ref.replace(/^\d+/, '5'), role: 'User' })) === 'stale' && code(post('admin.link', { session: S, ref: '5', role: 'User' })) === 'stale');
 sim.sheet(DB, 'DATABASE LOGIN').splice(2, 0, ['', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-check('rows moved since the list was read: the old reference is refused rather than hitting the wrong person', code(post('admin.link', { session: S, ref, role: 'Viewer' })) === 'stale' && link(S, 'kitti_s', { role: 'Viewer' }).ok);
+check('rows moved since the list was read: the old reference is refused rather than hitting the wrong person', code(post('admin.link', { session: S, ref, role: 'User' })) === 'stale' && link(S, 'kitti_s', { role: 'User' }).ok);
 raws.push(link(S, 'kitti_s').token);
 rowOf(sim, 'chan_t').cells[11] = 'chan_renamed';
 check('the main administrator keeps his rights after his Username changes', post('me', { session: S }).user.isSuper === true && link(S, 'somchai_t', { role: 'Admin' }).ok && list(S).mainAdmin === 'chan_renamed');
 rowOf(sim, 'chan_renamed').cells[11] = 'chan_t';
 check('dates of birth: a date cell, 1-Jan-1987, 1/1/2530 and 1987-01-01 all read as the same day; 31-Feb is no date', ["new Date('1987-01-01T00:00:00+07:00')", "'1-Jan-1987'", "'1/1/2530'", "'1987-01-01'", "'01 January 1987'"].every((v) => sim.run('toIso_(' + v + ", 'Asia/Bangkok')") === '1987-01-01') && sim.run("toIso_('31-Feb-2020', 'Asia/Bangkok')") === '' && sim.run("toIso_('', 'Asia/Bangkok')") === '');
-check('login works for a row whose date of birth is text', (() => { const g = link(S, 'pakorn_t', { role: 'Viewer' }); raws.push(g.token); return use(g.token, 'Text-Birth-Pass-08').ok && login('pakorn_t', 'Text-Birth-Pass-08', 2).ok; })());
+check('login works for a row whose date of birth is text', (() => { const g = link(S, 'pakorn_t', { role: 'User' }); raws.push(g.token); return use(g.token, 'Text-Birth-Pass-08').ok && login('pakorn_t', 'Text-Birth-Pass-08', 2).ok; })());
 
 /* ---------- one hour per login (ข้อ 1.10) ---------- */
 const K = login('krit_s', PW.krit, 1);
@@ -314,25 +316,31 @@ check('what was kept for a login that ran out long ago is thrown away at a later
 S = login('chan_t', PW.chan, 8).session;
 const tabs = () => sim.tabs(BDB), names = () => tabs().map((t) => t.name), tab = (n) => tabs().find((t) => t.name === n);
 const J = (v) => JSON.stringify(v), main = () => sim.sheet(DB, 'DATABASE LOGIN'), filled = (rows) => rows.filter((r) => (r || []).some((c) => c !== '' && c !== undefined)).length;
-const same = (n) => !!tab(n) && J(tab(n).rows) === J(main().slice(0, tab(n).rows.length)) && filled(main().slice(tab(n).rows.length)) === 0;
+// a daily tab: the people tab as it is, an empty row, a title row, then the WEB LIST tab (ข้อ 1.14.7.8)
+const same = (n) => {
+  const t = tab(n); if (!t) return false;
+  const k = t.rows.findIndex((r) => r && r[0] === 'สำเนาแท็บ WEB LIST'); if (k < 2) return false;
+  const people = t.rows.slice(0, k - 1), webs = t.rows.slice(k + 1).map((r) => r.slice(0, 4).map(String)), wl = sim.sheet(DB, 'WEB LIST').filter((r) => r.some((c) => c !== '')).map((r) => r.slice(0, 4).map(String));
+  return J(people) === J(main().slice(0, people.length)) && filled(main().slice(people.length)) === 0 && filled([t.rows[k - 1]]) === 0 && J(webs) === J(wl);
+};
 const guarded = (t) => !!t.prot && t.prot.warningOnly === false && t.prot.domain === false && J(t.prot.editors) === J(['owner']);
 const logsEqual = () => J(sim.sheet(BLOG)) === J(sim.sheet(LOG));
 const logsEqualTail = () => J(sim.sheet(BLOG).slice(-40)) === J(sim.sheet(LOG).slice(-40));      // after rows were deleted from BACKLOG by hand, the ends still match
 const events = (session) => list(session).backupEvents;
-check('1.13.1 the backup of LOGIN DATABASE has a tab named after today, a copy of the whole DATABASE LOGIN tab', role(S, 'krit_s', { role: 'Viewer' }).ok && same(sim.today()), names());
-check('1.13.1.1 that tab is exactly as large as the data: no empty rows or columns left over', tab(sim.today()).maxRows === tab(sim.today()).rows.length && tab(sim.today()).maxCols === 16 && filled(tab(sim.today()).rows.slice(-1)) === 1, [tab(sim.today()).maxRows, tab(sim.today()).maxCols]);
+check('1.13.1 the backup of LOGIN DATABASE has a tab named after today, a copy of the whole DATABASE LOGIN tab', role(S, 'krit_s', { role: 'Admin' }).ok && same(sim.today()), names());
+check('1.13.1.1 that tab is exactly as large as the data: no empty rows or columns left over', tab(sim.today()).maxRows === tab(sim.today()).rows.length && tab(sim.today()).maxCols === 17 && filled(tab(sim.today()).rows.slice(-1)) === 1, [tab(sim.today()).maxRows, tab(sim.today()).maxCols]);
 check('the LINK TOKEN tab is not backed up', !names().includes('LINK TOKEN') && !J(tabs().map((t) => t.rows)).includes('sha256:'));
 check('1.13.2 the backup of BACKLOG has every row of BACKLOG, the ones written before the backup existed included', logsEqual() && sim.sheet(BLOG).length > 40, [sim.sheet(BLOG).length, sim.sheet(LOG).length]);
 check('1.13.3 every tab of both backup files has Protect: the owner only, not a warning; the tab that was there before the system too', tabs().length >= 2 && names().includes('Sheet1') && tabs().every(guarded) && sim.tabs(BLOG).every(guarded), tabs().map((t) => [t.name, t.prot]));
 check('…and the main files are left without Protect: the system only protects the backups', sim.tabs(DB).every((t) => !t.prot) && sim.tabs(LOG).every((t) => !t.prot));
 const idBefore = tab(sim.today()).id, nTabs = tabs().length;
-check('a second change on the same day replaces that day\'s tab: still one tab for the day, the newest copy, protected at once', role(S, 'krit_s', { role: 'Editor' }).ok && tabs().length === nTabs && same(sim.today()) && tab(sim.today()).id !== idBefore && guarded(tab(sim.today())) && logsEqual());
-const gB = link(S, 'somchai_t', { role: 'Viewer' }); raws.push(gB.token);
+check('a second change on the same day replaces that day\'s tab: still one tab for the day, the newest copy, protected at once', role(S, 'krit_s', { role: 'User' }).ok && tabs().length === nTabs && same(sim.today()) && tab(sim.today()).id !== idBefore && guarded(tab(sim.today())) && logsEqual());
+const gB = link(S, 'somchai_t', { role: 'User' }); raws.push(gB.token);
 check('a user sets a password with no administrator around: the backup has the new Salt and hash', use(gB.token, 'Backup-Check-Pass-10').ok && same(sim.today()) && J(tab(sim.today()).rows).includes(cell('somchai_t', 13)) && logsEqual());
 // the next day
 const day1 = sim.today(), snap = J(tab(day1).rows);
 sim.advance(24 * 3600000); S = login('chan_t', PW.chan, 8).session;
-check('the next day a change makes a new tab; yesterday\'s tab is left exactly as it was', role(S, 'krit_s', { role: 'Viewer' }).ok && sim.today() !== day1 && same(sim.today()) && J(tab(day1).rows) === snap && !same(day1) && tabs().every(guarded), names());
+check('the next day a change makes a new tab; yesterday\'s tab is left exactly as it was', role(S, 'krit_s', { role: 'Admin' }).ok && sim.today() !== day1 && same(sim.today()) && J(tab(day1).rows) === snap && !same(day1) && tabs().every(guarded), names());
 // 60 days of daily tabs, then the last tab of each month
 const shift = (iso, n) => new Date(Date.parse(iso + 'T00:00:00Z') + n * 864e5).toISOString().slice(0, 10), now0 = sim.today(), ym = (k) => { const d = new Date(Date.UTC(+now0.slice(0, 4), +now0.slice(5, 7) - 1 - k, 1)); return d.toISOString().slice(0, 7); };
 const oldDays = [ym(5) + '-03', ym(5) + '-17', ym(5) + '-28', ym(4) + '-10', ym(4) + '-20', shift(now0, -61), shift(now0, -60), shift(now0, -59), shift(now0, -10)];
@@ -341,62 +349,125 @@ oldDays.concat(others).forEach((n) => sim.addTab(BDB, n));
 const all = names().filter((n) => /^\d{4}-\d{2}-\d{2}$/.test(n) && !isNaN(Date.parse(n + 'T00:00:00Z')) && new Date(n + 'T00:00:00Z').toISOString().slice(0, 10) === n).sort(), cut = shift(now0, -60);
 const expectKept = all.filter((n) => n >= cut || all.filter((m) => m.slice(0, 7) === n.slice(0, 7)).pop() === n);
 const evBefore = events(S).length;
-check('1.13.1.2 daily tabs older than 60 days are deleted at the next backup, except the last tab of each month', role(S, 'krit_s', { role: 'Editor' }).ok && J(names().filter((n) => all.includes(n)).sort()) === J(expectKept) && names().includes(ym(5) + '-28') && !names().includes(ym(5) + '-03') && !names().includes(ym(5) + '-17') && names().includes(ym(4) + '-20') && !names().includes(ym(4) + '-10') && names().includes(shift(now0, -60)) && names().includes(shift(now0, -59)) && names().includes(day1), [names(), expectKept]);
+check('1.13.1.2 daily tabs older than 60 days are deleted at the next backup, except the last tab of each month', role(S, 'krit_s', { role: 'User' }).ok && J(names().filter((n) => all.includes(n)).sort()) === J(expectKept) && names().includes(ym(5) + '-28') && !names().includes(ym(5) + '-03') && !names().includes(ym(5) + '-17') && names().includes(ym(4) + '-20') && !names().includes(ym(4) + '-10') && names().includes(shift(now0, -60)) && names().includes(shift(now0, -59)) && names().includes(day1), [names(), expectKept]);
 check('1.13.1.3 a tab whose name is not a date is never deleted', others.every((n) => names().includes(n)) && names().includes('Sheet1'));
 check('1.13.3.3 tabs the system had not protected before are protected without any report', tabs().every(guarded) && events(S).length === evBefore, events(S));
 // Protect is taken off by someone who can sign in as the owner of the backup files
 tab(sim.today()).prot = null; sim.tabs(BLOG)[0].prot.warningOnly = true;
 const nLog = log().length;
-check('1.13.3.4 Protect is taken off one tab and turned into a warning on another: the next backup puts both back', role(S, 'krit_s', { role: 'Viewer' }).ok && tabs().every(guarded) && sim.tabs(BLOG).every(guarded));
+check('1.13.3.4 Protect is taken off one tab and turned into a warning on another: the next backup puts both back', role(S, 'krit_s', { role: 'Admin' }).ok && tabs().every(guarded) && sim.tabs(BLOG).every(guarded));
 const evRows = log().slice(nLog).filter((r) => r[1] === 'BACKUP');
 check('1.13.7.1 BACKLOG has a row for each: BACKUP / PROTECT_RESTORED, no person, the file and the tab in the note', evRows.length === 2 && evRows.every((r) => r[2] === 'PROTECT_RESTORED' && r[3] === '' && r[4] === '' && r[5] === '' && r[10] === '' && /ไม่มี Protect sheet จึงตั้ง Protect ใหม่แล้ว/.test(r[13])) && evRows.some((r) => r[13].includes(sim.today()) && r[13].includes('BACKUP LOGIN DATABASE')) && evRows.some((r) => r[13].includes('Sheet1') && r[13].includes('BACKUP BACKLOG')) && logsEqual(), evRows);
 const ev1 = events(S);
 check('1.13.7.2 the Admin page gets the list: when, what, in words; nothing else', ev1.length === 2 && ev1.every((e) => J(Object.keys(e).sort()) === J(['at', 'event', 'text']) && e.event === 'PROTECT_RESTORED' && typeof e.at === 'number') && !J(ev1).includes(BDB) && !J(ev1).includes(BLOG), ev1);
 const W2 = login('weera_t', PW.weera, 6).session;
-check('…every administrator sees it, whoever was signed in when it happened; others never do', J(events(W2)) === J(ev1) && code(list(login('krit_s', PW.krit, 1).session)) === 'forbidden');
+check('…every administrator sees it, whoever was signed in when it happened; others never do', J(events(W2)) === J(ev1) && code(list(login('thana_t', PW.thana, 3).session)) === 'forbidden');
 check('…only the main administrator can acknowledge', code(post('admin.backupAck', { session: W2 })) === 'forbidden' && /เฉพาะ chan_t/.test(post('admin.backupAck', { session: W2 }).error.message) && events(S).length === 2);
 tab(sim.today()).prot = null;
-check('1.13.7.4 unacknowledged events stop nothing: the system goes on saving; 1.13.7.5 a new event joins the same list', role(S, 'krit_s', { role: 'Editor' }).ok && cell('krit_s', 10) === 'Editor' && events(S).length === 3 && events(S).every((e, i, a) => !i || a[i - 1].at <= e.at) && !!login('krit_s', PW.krit, 1).session);
+check('1.13.7.4 unacknowledged events stop nothing: the system goes on saving; 1.13.7.5 a new event joins the same list', role(S, 'krit_s', { role: 'User' }).ok && cell('krit_s', 10) === 'User' && events(S).length === 3 && events(S).every((e, i, a) => !i || a[i - 1].at <= e.at) && !!login('krit_s', PW.krit, 1).session);
 const ack = post('admin.backupAck', { session: S });
 check('1.13.7.3 the main administrator acknowledges all of them at once; BACKLOG says who and when', ack.ok && ack.acknowledged === 3 && events(S).length === 0 && events(W2).length === 0 && lastLog()[1] === 'BACKUP' && lastLog()[2] === 'BACKUP_ACKNOWLEDGED' && lastLog()[10] === 'chan_t' && /3 เหตุการณ์/.test(lastLog()[13]) && isD(lastLog()[0]) && logsEqual(), [ack, lastLog()]);
 check('…with nothing to acknowledge there is nothing to do', code(post('admin.backupAck', { session: S })) === 'no_change');
 // a backup that cannot be made
 sim.files[BDB].gone = true;
-const f1 = role(S, 'krit_s', { role: 'Viewer' });
-check('1.13.6 the backup of LOGIN DATABASE cannot be made: the change itself is saved all the same', f1.ok && cell('krit_s', 10) === 'Viewer' && log().some((r) => r[2] === 'ROLE_CHANGED' && r[5] === 'krit_s' && r[8] === 'Viewer'), f1);
+const f1 = role(S, 'krit_s', { role: 'Admin' });
+check('1.13.6 the backup of LOGIN DATABASE cannot be made: the change itself is saved all the same', f1.ok && cell('krit_s', 10) === 'Admin' && log().some((r) => r[2] === 'ROLE_CHANGED' && r[5] === 'krit_s' && r[8] === 'User'), f1);
 check('…BACKLOG and the Admin page say so, in plain words without the file id', lastLog()[1] === 'BACKUP' && lastLog()[2] === 'BACKUP_FAILED' && /Backup ไม่สำเร็จ: ไฟล์ BACKUP LOGIN DATABASE/.test(lastLog()[13]) && !lastLog()[13].includes(BDB) && events(S).length === 1 && events(S)[0].event === 'BACKUP_FAILED' && logsEqual(), lastLog());
 sim.files[BDB].gone = false;
-check('…once the file is back, the next change brings the backup up to date', role(S, 'krit_s', { role: 'Editor' }).ok && same(sim.today()) && tabs().every(guarded) && events(S).length === 1);
+check('…once the file is back, the next change brings the backup up to date', role(S, 'krit_s', { role: 'User' }).ok && same(sim.today()) && tabs().every(guarded) && events(S).length === 1);
 sim.files[BLOG].readOnly = true;
-const f2 = role(S, 'krit_s', { role: 'Viewer' }), behind = sim.sheet(LOG).length - sim.sheet(BLOG).length;
-check('the backup of BACKLOG cannot be written: the change and its BACKLOG rows are saved, the failure is reported once', f2.ok && cell('krit_s', 10) === 'Viewer' && behind === 2 && lastLog()[2] === 'BACKUP_FAILED' && /BACKUP BACKLOG/.test(lastLog()[13]) && same(sim.today()) && events(S).length === 2, [f2, behind, lastLog()]);
+const f2 = role(S, 'krit_s', { role: 'Admin' }), behind = sim.sheet(LOG).length - sim.sheet(BLOG).length;
+check('the backup of BACKLOG cannot be written: the change and its BACKLOG rows are saved, the failure is reported once', f2.ok && cell('krit_s', 10) === 'Admin' && behind === 2 && lastLog()[2] === 'BACKUP_FAILED' && /BACKUP BACKLOG/.test(lastLog()[13]) && same(sim.today()) && events(S).length === 2, [f2, behind, lastLog()]);
 sim.files[BLOG].readOnly = false;
-check('…once it can be written again, the rows it missed are added at the next change', role(S, 'krit_s', { role: 'Editor' }).ok && logsEqual() && post('admin.backupAck', { session: S }).acknowledged === 2 && logsEqual());
+check('…once it can be written again, the rows it missed are added at the next change', role(S, 'krit_s', { role: 'User' }).ok && logsEqual() && post('admin.backupAck', { session: S }).acknowledged === 2 && logsEqual());
 // BACKLOG loses rows by hand: the backup keeps what it has and still gets every new row
 const nBk = sim.sheet(BLOG).length; sim.sheet(LOG).splice(5, 6);
-check('rows are deleted from BACKLOG by hand: the backup keeps them, and still gets the rows of the next change', role(S, 'krit_s', { role: 'Viewer' }).ok && sim.sheet(BLOG).length === nBk + 1 && sim.sheet(LOG).length === nBk - 6 + 1 && J(sim.sheet(BLOG).slice(-1)) === J(sim.sheet(LOG).slice(-1)) && events(S).length === 0, [sim.sheet(BLOG).length, sim.sheet(LOG).length, nBk]);
+check('rows are deleted from BACKLOG by hand: the backup keeps them, and still gets the rows of the next change', role(S, 'krit_s', { role: 'Admin' }).ok && sim.sheet(BLOG).length === nBk + 1 && sim.sheet(LOG).length === nBk - 6 + 1 && J(sim.sheet(BLOG).slice(-1)) === J(sim.sheet(LOG).slice(-1)) && events(S).length === 0, [sim.sheet(BLOG).length, sim.sheet(LOG).length, nBk]);
 sim.tabs(BLOG)[0].maxRows = sim.sheet(BLOG).length;
-check('the backup of BACKLOG has used every row of its sheet: rows are added to the sheet and the backup goes on', role(S, 'krit_s', { role: 'Editor' }).ok && sim.sheet(BLOG).length === nBk + 2 && sim.tabs(BLOG)[0].maxRows === nBk + 2 && events(S).length === 0);
+check('the backup of BACKLOG has used every row of its sheet: rows are added to the sheet and the backup goes on', role(S, 'krit_s', { role: 'User' }).ok && sim.sheet(BLOG).length === nBk + 2 && sim.tabs(BLOG)[0].maxRows === nBk + 2 && events(S).length === 0);
 // a formula in the main tab that looks at another tab
 const fRow = rowOf(sim, 'krit_s').at; sim.tabs(DB)[0].formulas = { [fRow + ',16']: '=OtherTab!A1', [(fRow + 1) + ',16']: '=OtherTab!A2' };
 rowOf(sim, 'krit_s').cells[15] = 'จากสูตร 1'; main()[fRow][15] = 'จากสูตร 2';
-check('a cell with a formula that looks at another tab: the backup has the value the original shows, not a broken reference', role(S, 'krit_s', { role: 'Viewer' }).ok && same(sim.today()) && tab(sim.today()).rows[fRow - 1][15] === 'จากสูตร 1' && tab(sim.today()).rows[fRow][15] === 'จากสูตร 2' && !J(tab(sim.today()).rows).includes('#REF!'));
+check('a cell with a formula that looks at another tab: the backup has the value the original shows, not a broken reference', role(S, 'krit_s', { role: 'Admin' }).ok && same(sim.today()) && tab(sim.today()).rows[fRow - 1][15] === 'จากสูตร 1' && tab(sim.today()).rows[fRow][15] === 'จากสูตร 2' && !J(tab(sim.today()).rows).includes('#REF!'));
 delete sim.tabs(DB)[0].formulas;
 // many failures in a row: the list for the Admin page stays within what a script property can hold
 sim.files[BDB].gone = true; const nBefore = log().filter((r) => r[2] === 'BACKUP_FAILED').length;
-for (let i = 0; i < 60; i++) role(S, 'krit_s', { role: i % 2 ? 'Viewer' : 'Editor' });
+for (let i = 0; i < 60; i++) role(S, 'krit_s', { role: i % 2 ? 'Admin' : 'User' });
 sim.files[BDB].gone = false;
 check('60 failed backups in a row: every one is in BACKLOG, the list for the Admin page keeps the newest and stays under 9 KB', log().filter((r) => r[2] === 'BACKUP_FAILED').length === nBefore + 60 && events(S).length >= 20 && events(S).length <= 50 && Buffer.byteLength(sim.props.BK_EVENTS, 'utf8') < 9000 && events(S).every((e, i, a) => !i || a[i - 1].at <= e.at), [events(S).length, Buffer.byteLength(sim.props.BK_EVENTS, 'utf8')]);
 check('…and one acknowledgement clears them', post('admin.backupAck', { session: S }).ok && events(S).length === 0 && logsEqualTail());
 check('the back end logged the failures for the owner, and nothing else', sim.logs.filter((l) => l.startsWith('console.error')).length === 62 && sim.logs.filter((l) => l.startsWith('console.error')).every((l) => /backup of BACKUP (LOGIN DATABASE|BACKLOG) failed/.test(l)), sim.logs.filter((l) => l.startsWith('console.error')));
 sim.logs.splice(0, sim.logs.length, ...sim.logs.filter((l) => !l.startsWith('console.error')));
 
+/* ---------- web access per account (ข้อ 1.14) ---------- */
+S = login('chan_t', PW.chan, 8).session;
+let Wa = login('weera_t', PW.weera, 6).session;
+const heads = main().filter((r) => r[2] === 'ชื่อ-สกุล');
+check('1.14.5.2 setup added the column "สิทธิ์เว็บ" to every header row, at the same place', heads.length >= 4 && heads.every((r) => r[16] === 'สิทธิ์เว็บ') && sim.logs.some((l) => /เพิ่มคอลัมน์ "สิทธิ์เว็บ" ที่คอลัมน์ Q/.test(l)), heads.map((r) => r[16]));
+check('1.14.5.1 setup made the WEB LIST tab with its header', J(sim.sheet(DB, 'WEB LIST')[0]) === J(['รหัสเว็บ', 'ชื่อเว็บ', 'ลิงก์', 'สถานะ']));
+sim.setup({});
+check('running setup again adds nothing twice', main().filter((r) => r.includes('สิทธิ์เว็บ')).length === heads.length && sim.tabs(DB).filter((t) => t.name === 'WEB LIST').length === 1);
+const wl = (session, o) => post('admin.webList', Object.assign({ session }, o));
+const enter = (session, web) => post('web.enter', { session, web });
+const tS = login('thana_t', PW.thana, 3);
+check('1.14.2.3 before any web is given: logged in, no web; any web is refused', tS.ok && J(tS.user.webs) === '[]' && code(enter(tS.session, 'AIRCRAFT')) === 'no_web');
+check('1.14.7.1 another administrator cannot touch the list of webs', code(wl(Wa, { act: 'add', code: 'AIRCRAFT', name: 'x', link: 'https://x.example/' })) === 'forbidden');
+check('1.14.7.2 bad codes, a code twice, a bad link, a name taken for a formula: refused', ['9X', 'A', 'AB-C', 'A'.repeat(21), ''].every((c) => code(wl(S, { act: 'add', code: c, name: 'x', link: 'https://x/' })) === 'bad_web')
+  && code(wl(S, { act: 'add', code: 'AIRCRAFT', name: 'x', link: 'http://x/' })) === 'bad_web' && code(wl(S, { act: 'add', code: 'AIRCRAFT', name: '=IMPORTXML("x")', link: 'https://x/' })) === 'bad_web' && code(wl(S, { act: 'add', code: 'AIRCRAFT', name: '', link: 'https://x/' })) === 'bad_web' && sim.sheet(DB, 'WEB LIST').length === 1);
+const a1 = wl(S, { act: 'add', code: 'aircraft', name: 'สถานภาพอากาศยาน', link: 'https://example.github.io/aircraft/' });
+check('1.14.7.2 a web is added (the code in capitals), written as text, logged WEB_LIST / WEB_ADDED by the main admin', a1.ok && J(sim.sheet(DB, 'WEB LIST')[1]) === J(['AIRCRAFT', 'สถานภาพอากาศยาน', 'https://example.github.io/aircraft/', 'เปิด']) && lastLog()[1] === 'WEB_LIST' && lastLog()[2] === 'WEB_ADDED' && lastLog()[10] === 'chan_t' && lastLog()[5] === '' && /AIRCRAFT/.test(lastLog()[13]), [a1, lastLog()]);
+check('…and the same code again is refused', code(wl(S, { act: 'add', code: 'AIRCRAFT', name: 'y', link: 'https://y/' })) === 'bad_web');
+wl(S, { act: 'add', code: 'REPORT', name: 'ส่งรายงาน', link: 'https://example.github.io/report/' });
+check('1.14.7.8 the list of webs goes into today\'s backup tab', same(sim.today()) && J(tab(sim.today()).rows).includes('REPORT'));
+const LS = list(S), LW = list(Wa);
+check('admin.list for the main admin: the webs and everyone\'s access', J(LS.webs.map((w) => w.code)) === J(['AIRCRAFT', 'REPORT']) && LS.webColumn === true && LS.people.every((p) => p.web && typeof p.web === 'object'));
+check('1.14.2.4.1 admin.list for another admin: no web, no access, not a word of them', LW.ok && !('webs' in LW) && !('webColumn' in LW) && LW.people.every((p) => !('web' in p)) && !/AIRCRAFT|REPORT|สิทธิ์เว็บ/.test(JSON.stringify(LW)));
+const wa = (session, key, web) => post('admin.web', { session, ref: person(S, key).ref, web });
+check('1.14.2.4 another admin cannot set web access, not even his own', code(wa(Wa, 'thana_t', { AIRCRAFT: 'Editor' })) === 'forbidden' && code(wa(Wa, 'weera_t', { AIRCRAFT: 'Admin' })) === 'forbidden');
+check('…the main admin has every web already: nothing to set for himself', code(wa(S, 'chan_t', { AIRCRAFT: 'Viewer' })) === 'forbidden');
+check('bad Role, unknown web, no change: refused', code(wa(S, 'thana_t', { AIRCRAFT: 'Boss' })) === 'bad_role' && code(wa(S, 'thana_t', { NOPE: 'Viewer' })) === 'bad_web' && code(wa(S, 'thana_t', { AIRCRAFT: '' })) === 'no_change');
+const nLogW = log().length, wA1 = wa(S, 'thana_t', { AIRCRAFT: 'Editor', report: 'Viewer' });
+check('1.14.2.6 the main admin sets two webs at once: one cell, saved now', wA1.ok && wA1.changed === 2 && cell('thana_t', 16) === 'AIRCRAFT=Editor; REPORT=Viewer', [wA1, cell('thana_t', 16)]);
+check('1.14.2.7 one BACKLOG row per web: WEB_ACCESS / WEB_ACCESS_CHANGED, from → to', log().length === nLogW + 2 && log().slice(-2).every((r) => r[1] === 'WEB_ACCESS' && r[2] === 'WEB_ACCESS_CHANGED' && r[5] === 'thana_t' && r[10] === 'chan_t') && /สถานภาพอากาศยาน \(AIRCRAFT\): ไม่มีสิทธิ์ → Editor/.test(log()[nLogW][13]), log().slice(-2));
+check('…and the change goes into today\'s backup', same(sim.today()) && J(tab(sim.today()).rows).includes('AIRCRAFT=Editor; REPORT=Viewer'));
+check('1.14.2.4 the main admin sets web access for another administrator', wa(S, 'weera_t', { AIRCRAFT: 'Viewer' }).ok);
+const mT = me(tS.session);
+check('1.14.3.3 the open login sees its webs at once, each with its Role (the row is read again)', J(mT.user.webs.map((w) => w.code + ':' + w.role)) === J(['AIRCRAFT:Editor', 'REPORT:Viewer']) && mT.user.webs[0].name === 'สถานภาพอากาศยาน' && mT.user.webs[0].link === 'https://example.github.io/aircraft/', mT.user.webs);
+const e1 = enter(tS.session, 'AIRCRAFT'), e2 = enter(tS.session, 'report');
+check('1.14.3.5 web.enter: Editor in one web, Viewer in the other', e1.ok && e1.web.role === 'Editor' && e1.user.username === 'thana_t' && e2.ok && e2.web.role === 'Viewer' && e2.web.code === 'REPORT', [e1, e2]);
+const sSom = login('somchai_t', 'Backup-Check-Pass-10', 9);
+check('1.14.3.2 an account with no web: logs in, has no web, cannot enter one', sSom.ok && J(sSom.user.webs) === '[]' && code(enter(sSom.session, 'AIRCRAFT')) === 'no_web' && /ไม่มีสิทธิ์ใช้งานเว็บนี้/.test(enter(sSom.session, 'AIRCRAFT').error.message));
+const sKr = login('krit_s', PW.krit, 1);
+check('1.14.4.2 an administrator with no web access: the Role Admin gives him no web', sKr.ok && sKr.user.role === 'Admin' && J(sKr.user.webs) === '[]' && code(enter(sKr.session, 'REPORT')) === 'no_web');
+Wa = login('weera_t', PW.weera, 6).session;
+check('…another administrator enters the web the main admin gave him, as given', enter(Wa, 'AIRCRAFT').web.role === 'Viewer' && code(enter(Wa, 'REPORT')) === 'no_web');
+S = login('chan_t', PW.chan, 8).session;
+check('1.14.2.5 the main admin: every open web, as Admin', J(me(S).user.webs.map((w) => w.code + ':' + w.role)) === J(['AIRCRAFT:Admin', 'REPORT:Admin']) && enter(S, 'REPORT').web.role === 'Admin');
+const tT = login('thana_t', PW.thana, 3).session;
+check('a web nobody has heard of: the same answer as no access', code(enter(tT, 'NOPE')) === 'no_web' && code(enter(tT, '')) === 'no_web' && code(enter('', 'AIRCRAFT')) === 'auth');
+check('1.14.7.3 name and link changed, the code stays: WEB_CHANGED, and the access is untouched', wl(S, { act: 'edit', code: 'AIRCRAFT', name: 'สถานภาพอากาศยาน ฝูง.602', link: 'https://example.github.io/ac/' }).ok && lastLog()[2] === 'WEB_CHANGED' && cell('thana_t', 16) === 'AIRCRAFT=Editor; REPORT=Viewer' && me(tT).user.webs[0].name === 'สถานภาพอากาศยาน ฝูง.602' && code(wl(S, { act: 'edit', code: 'AIRCRAFT', name: 'สถานภาพอากาศยาน ฝูง.602', link: 'https://example.github.io/ac/' })) === 'no_change');
+check('…a web that is not there cannot be edited', code(wl(S, { act: 'edit', code: 'NOPE', name: 'x', link: 'https://x/' })) === 'bad_web');
+check('1.14.7.4 a web closed: WEB_CLOSED; nobody enters it, the main admin neither; gone from the list after login', wl(S, { act: 'close', code: 'AIRCRAFT' }).ok && lastLog()[2] === 'WEB_CLOSED' && code(enter(tT, 'AIRCRAFT')) === 'web_closed' && code(enter(S, 'AIRCRAFT')) === 'web_closed' && J(me(tT).user.webs.map((w) => w.code)) === J(['REPORT']) && code(wl(S, { act: 'close', code: 'AIRCRAFT' })) === 'no_change');
+check('…the access written for it is kept, and can still be changed', cell('thana_t', 16) === 'AIRCRAFT=Editor; REPORT=Viewer' && J(list(S).people.find((p) => p.username === 'thana_t').web) === J({ AIRCRAFT: 'Editor', REPORT: 'Viewer' }));
+check('…opened again: WEB_OPENED, the old access is back', wl(S, { act: 'open', code: 'AIRCRAFT' }).ok && lastLog()[2] === 'WEB_OPENED' && enter(tT, 'AIRCRAFT').web.role === 'Editor');
+check('1.14.3.4 access taken away: the open login is refused at its next request', wa(S, 'thana_t', { AIRCRAFT: '' }).ok && cell('thana_t', 16) === 'REPORT=Viewer' && code(enter(tT, 'AIRCRAFT')) === 'no_web' && enter(tT, 'REPORT').ok);
+rowOf(sim, 'thana_t').cells[16] = 'aircraft=editor, junk; REPORT = viewer ; X=Boss';
+check('a cell written by hand: what can be read is read, the rest is left out', J(me(tT).user.webs.map((w) => w.code + ':' + w.role)) === J(['AIRCRAFT:Editor', 'REPORT:Viewer']));
+rowOf(sim, 'thana_t').cells[16] = 'REPORT=Viewer';
+rowOf(sim, 'thana_t').cells[10] = 'Editor';
+const lT = login('thana_t', PW.thana, 3);
+check('1.14.4.3 a Role still written as Editor: read as User, and left as it is in the sheet', lT.ok && lT.user.role === 'User' && cell('thana_t', 10) === 'Editor' && code(list(lT.session)) === 'forbidden');
+sim.setup({});
+check('…setup lists the rows that still have the old Role names', sim.logs.some((l) => /ยังเป็น Editor หรือ Viewer.*: \d+/.test(l)));
+rowOf(sim, 'thana_t').cells[10] = 'User';
+check('the web calls that write are refused without a session before anything is read', ['admin.web', 'admin.webList'].every((op) => code(post(op, {})) === 'auth'));
+
 /* ---------- what is left in the sheets ---------- */
 const everything = JSON.stringify([sim.sheet(DB, 'DATABASE LOGIN'), sim.sheet(DB, 'LINK TOKEN'), sim.sheet(LOG), sim.tabs(BDB).map((t) => t.rows), sim.tabs(BLOG).map((t) => t.rows), Object.keys(sim.props).filter((k) => k !== 'SECRET').map((k) => [k, sim.props[k]])]);
 check('no password is anywhere in the sheets, the backup files or the script properties', !Object.values(PW).concat(['Text-Birth-Pass-08', 'Some-Password-07']).some((p) => everything.includes(p)));
 check('no one-time token is anywhere in the sheets, the backup files or the script properties', raws.length >= 12 && raws.every((t) => t && !everything.includes(t)), raws.length);
 check('nothing the back end wrote was taken for a formula or a number', !everything.includes('#NAME?') && sim.sheet(DB, 'DATABASE LOGIN').every((r) => text(r[12]) && text(r[13])) && tokens().every((r) => typeof r[0] === 'string' && typeof r[1] === 'string'));
-check('BACKLOG rows all have 14 cells, a time, an action and an event', log().every((r) => r.length === 14 && isD(r[0]) && ['CREATE', 'RESET', 'CHANGE_ROLE', 'CHANGE_USERNAME', 'BACKUP'].includes(r[1]) && typeof r[2] === 'string'), log().find((r) => r.length !== 14));
+check('BACKLOG rows all have 14 cells, a time, an action and an event', log().every((r) => r.length === 14 && isD(r[0]) && ['CREATE', 'RESET', 'CHANGE_ROLE', 'CHANGE_USERNAME', 'BACKUP', 'WEB_ACCESS', 'WEB_LIST'].includes(r[1]) && typeof r[2] === 'string'), log().find((r) => r.length !== 14));
 check('the back end logged no unexpected error', !sim.logs.some((l) => l.startsWith('console.error')), sim.logs.filter((l) => l.startsWith('console.error')));
 rowOf(sim, 'phum_s').cells[13] = 'pbkdf2-sha256$5000$zz';
 check('a damaged hash cell: that account cannot log in, nothing breaks', code(login('phum_s', PW.phum2, 5)) === 'login_failed');

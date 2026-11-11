@@ -106,6 +106,7 @@ export async function startSim(opts = {}) {
       },
       insertRowsAfter(at, n) { mayEdit(); if (at < 1 || at > sh.maxRows) throw new Error('Those rows are out of bounds.'); sh.maxRows += n; },      // only ever used after the last row
       deleteRows(at, n) { if (at < 1 || at + n - 1 > sh.maxRows || n >= sh.maxRows) throw new Error('Those rows are out of bounds.'); sh.rows.splice(at - 1, n); sh.maxRows -= n; },
+      insertColumnsAfter(at, n) { mayEdit(); if (at < 1 || at > sh.maxCols) throw new Error('Those columns are out of bounds.'); sh.maxCols += n; },      // only ever used after the last column
       deleteColumns(at, n) { if (at < 1 || at + n - 1 > sh.maxCols || n >= sh.maxCols) throw new Error('Those columns are out of bounds.'); sh.rows.forEach((r) => r && r.splice(at - 1, n)); sh.maxCols -= n; },
       getName: () => sh.name,
       getMaxRows: () => sh.maxRows, getMaxColumns: () => sh.maxCols, getLastRow: () => lastRow(sh), getLastColumn: () => lastCol(sh),

@@ -14,7 +14,7 @@
     <div>
       <p class="unit">ฝูง.602 บน.6 · สถานภาพอากาศยาน</p>
       <h1>ให้สิทธิ์ผู้ใช้งาน</h1>
-      <p class="sub">สร้าง Password ครั้งแรก, Reset Password, เปลี่ยน Role และเปลี่ยน Username</p>
+      <p class="sub" id="sub">สร้าง Password ครั้งแรก, Reset Password, เปลี่ยน Role และเปลี่ยน Username</p>
     </div>
     <div class="who">
       <span class="chip" id="me-name"></span>
@@ -59,7 +59,7 @@
           <p><b class="t">บัญชีนี้เคยตั้ง Password แล้ว</b></p>
           <div class="seg" role="radiogroup" aria-label="สิ่งที่ต้องการทำ">
             <label><input type="radio" name="mode" id="m-reset" value="reset" checked>Reset Password</label>
-            <label><input type="radio" name="mode" id="m-role" value="role">เปลี่ยน Role</label>
+            <label><input type="radio" name="mode" id="m-role" value="role"><span id="m-role-t">เปลี่ยน Role</span></label>
           </div>
         </div>
 
@@ -117,6 +117,19 @@
         <div id="rights-body"></div>
       </section>
 
+      <!-- ข้อ 1.14.2: web access of the chosen account. The main administrator only; others are not sent any of it. -->
+      <section class="panel" id="webbox" aria-labelledby="web-h" hidden>
+        <div>
+          <h2 id="web-h">สิทธิ์เข้าใช้งานเว็บ</h2>
+          <p class="hint" id="web-for"></p>
+        </div>
+        <div class="tbl"><table><thead><tr><th>เว็บ</th><th>Role ในเว็บนี้</th></tr></thead><tbody id="web-rows"></tbody></table></div>
+        <p class="hint" id="web-hint"></p>
+        <div class="actions" id="web-actions"><button type="button" class="btn primary" id="web-go">บันทึกสิทธิ์เว็บ</button><span class="hint" id="web-why"></span></div>
+        <p class="note bad" id="web-fail" role="alert" hidden></p>
+        <p class="note ok" id="web-done" role="status" hidden></p>
+      </section>
+
       <section class="panel" id="linkbox" aria-labelledby="link-h" hidden>
         <h2 id="link-h">One Time Link</h2>
         <p id="lk-for"></p>
@@ -129,6 +142,28 @@
       </section>
     </aside>
   </div>
+
+  <!-- ข้อ 1.14.7: the list of webs. The main administrator only. A code never changes; a web is closed, never deleted. -->
+  <section class="panel" id="wl" aria-labelledby="wl-h" hidden>
+    <div>
+      <h2 id="wl-h">รายชื่อเว็บ</h2>
+      <p class="hint">แก้ชื่อเว็บและลิงก์ได้ แต่แก้รหัสเว็บไม่ได้ ไม่มีการลบ ใช้ปิดเว็บแทน เว็บที่ปิดไม่มีใครเข้าได้ และสิทธิ์เดิมของทุกบัญชียังเก็บไว้</p>
+    </div>
+    <p class="note warn" id="wl-nocol" hidden>แท็บ DATABASE LOGIN ยังไม่มีคอลัมน์ "สิทธิ์เว็บ" ให้เจ้าของระบบเปิดหน้า Apps Script แล้วกด Run ฟังก์ชัน setup อีกครั้ง</p>
+    <div class="tbl"><table><thead><tr><th>รหัสเว็บ</th><th>ชื่อเว็บ</th><th>ลิงก์</th><th>สถานะ</th><th></th></tr></thead><tbody id="wl-rows"></tbody></table></div>
+    <fieldset class="step">
+      <legend>เพิ่มเว็บ</legend>
+      <div class="wl-add">
+        <input type="text" id="wl-code" class="mono" placeholder="รหัสเว็บ เช่น AIRCRAFT" aria-label="รหัสเว็บ" spellcheck="false" autocapitalize="characters" maxlength="20">
+        <input type="text" id="wl-name" placeholder="ชื่อเว็บ" aria-label="ชื่อเว็บ" maxlength="100">
+        <input type="text" id="wl-link" class="mono" placeholder="https://..." aria-label="ลิงก์" spellcheck="false" autocapitalize="off">
+        <button type="button" class="btn primary" id="wl-add">เพิ่มเว็บ</button>
+      </div>
+      <p class="hint">รหัสเว็บ: อังกฤษตัวใหญ่ ตัวเลข หรือขีดล่าง ยาว 2–20 ตัว ขึ้นต้นด้วยตัวอักษร ห้ามซ้ำ ตั้งแล้วแก้ไม่ได้ · เว็บที่เพิ่มใหม่ยังไม่มีใครมีสิทธิ์</p>
+    </fieldset>
+    <p class="note bad" id="wl-fail" role="alert" hidden></p>
+    <p class="note ok" id="wl-done" role="status" hidden></p>
+  </section>
 </div>
 
 <script src="assets/config.js"></script>
@@ -142,16 +177,19 @@
   let people = [], me = null, mainAdmin = '', today = '', linkMinutes = 30, backup = [], bkBusy = false, bkErr = '';
   let target = null, mode = 'reset', confirmSelf = false, done = '', fail = '', busy = false, last = null;
   let confirmUser = false, userDone = '', userFail = '';                 // the separate "เปลี่ยน Username" action
+  let webs = null, webColumn = true, webDone = '', webFail = '', wlDone = '', wlFail = '';   // ข้อ 1.14: sent to the main administrator only
   const mine = session().token;
   buildDP('end', years(beYear(), beYear() + 10));
   const full = (p) => (p.rank ? p.rank + ' ' : '') + p.name, label = (p) => full(p) + ' (' + p.pos + ')';
 
   // What I may do to this account. The same rules are applied again by the back end; this only decides what to show.
   function perm(t) {
-    const o = { link: false, user: false, role: false, admin: false, end: false, why: '' };
+    const o = { link: false, user: false, role: false, roleSwap: false, admin: false, end: false, web: false, why: '' };
     if (!me.isSuper && t.isSuper) { o.why = 'บัญชี ' + mainAdmin + ' แก้ไขได้เฉพาะเจ้าของบัญชี Admin คนอื่นเปลี่ยน Role แก้ Username หรือ Reset Password ให้ไม่ได้'; return o; }
     if (!me.isSuper && t.role === 'Admin' && !t.isMe) { o.why = 'Admin ด้วยกันเปลี่ยน Role หรือ Reset Password ให้กันไม่ได้ ต้องให้ ' + mainAdmin + ' ดำเนินการ'; return o; }
     o.link = true; o.user = me.isSuper; o.role = !(me.isSuper && t.isMe); o.admin = me.isSuper && !t.isMe; o.end = !t.isSuper;
+    o.roleSwap = me.isSuper ? !t.isMe : t.isMe;          // another administrator may only lower his own Role to User (ข้อ 1.14.4.5)
+    o.web = me.isSuper && !t.isMe;                          // ข้อ 1.14.2.4
     return o;
   }
 
@@ -200,18 +238,95 @@
   function buildRoles() {
     const o = perm(target), cur = target.role || '';
     let h = cur ? '' : '<option value="">เลือก Role</option>';
-    ['Admin', 'Editor', 'Viewer'].forEach((r) => {
+    ['Admin', 'User'].forEach((r) => {                     // ข้อ 1.14.4.1: Role of the account: an administrator, or not
       const ok = r !== 'Admin' || o.admin || cur === 'Admin';
-      h += '<option value="' + r + '"' + (ok ? '' : ' disabled') + '>' + r + (ok ? '' : ' (ตั้งได้เฉพาะ ' + esc(mainAdmin) + ')') + '</option>';
+      h += '<option value="' + r + '"' + (ok ? '' : ' disabled') + '>' + (r === 'User' ? 'User (ผู้ใช้ทั่วไป)' : r) + (ok ? '' : ' (ตั้งได้เฉพาะ ' + esc(mainAdmin) + ')') + '</option>';
     });
     $('role').innerHTML = h; $('role').value = cur;
   }
   function pick(t) {
-    target = t; mode = 'reset'; confirmSelf = false; done = ''; fail = ''; confirmUser = false; userDone = ''; userFail = '';
+    target = t; mode = 'reset'; confirmSelf = false; done = ''; fail = ''; confirmUser = false; userDone = ''; userFail = ''; webDone = ''; webFail = '';
     who.value = t ? label(t) : '';
-    if (t) { $('uname').value = t.username || ''; buildRoles(); setDP('end', t.end || ''); }
+    if (t) { $('uname').value = t.username || ''; buildRoles(); setDP('end', t.end || ''); buildWeb(); }
     draw();
   }
+  /* ---------- ข้อ 1.14.2: web access, the main administrator only, saved at once ---------- */
+  const webRole = (t, code) => (t.isSuper ? 'Admin' : (t.web || {})[code] || '');
+  function buildWeb() {
+    if (!webs) { $('web-rows').innerHTML = ''; return; }
+    $('web-rows').innerHTML = webs.map((w) => '<tr><td>' + esc(w.name) + ' <span class="hint mono">' + esc(w.code) + '</span>' + (w.open ? '' : ' <span class="chip warn">ปิดอยู่</span>') + '</td><td><select data-web="' + esc(w.code) + '" aria-label="Role ใน' + esc(w.name) + '">'
+      + '<option value="">ไม่มีสิทธิ์</option>' + ['Admin', 'Editor', 'Viewer'].map((r) => '<option value="' + r + '"' + (r === webRole(target, w.code) ? ' selected' : '') + '>' + r + '</option>').join('') + '</select></td></tr>').join('');
+  }
+  const webDraft = () => Array.from(document.querySelectorAll('#web-rows select')).map((s) => [s.dataset.web, s.value]);
+  const webChanged = () => webDraft().filter(([c, v]) => v !== webRole(target, c));
+  function drawWeb(o) {
+    const t = target;
+    $('webbox').hidden = !t || !webs;
+    if ($('webbox').hidden) return;
+    const ch = webChanged(), none = !t.isSuper && !Object.keys(t.web || {}).length;
+    $('web-for').textContent = 'บัญชี ' + (t.username || full(t)) + ' · ' + (t.isSuper ? 'Admin หลัก' : 'Role ของบัญชี: ' + (t.role || 'ยังไม่มี'));
+    document.querySelectorAll('#web-rows select').forEach((s) => { s.disabled = !o.web || busy || !webColumn; });
+    $('web-hint').textContent = !webs.length ? 'ยังไม่มีเว็บในรายชื่อ เพิ่มเว็บได้ที่ส่วน "รายชื่อเว็บ" ด้านล่าง'
+      : t.isSuper ? 'Admin หลักเข้าได้ทุกเว็บในฐานะ Admin เสมอ ไม่ต้องกำหนด และถูกถอนสิทธิ์ไม่ได้'
+      : o.why ? '' : (none ? 'บัญชีนี้ยังไม่ได้รับสิทธิ์เว็บใด Login ได้แต่เข้าเว็บไม่ได้ ' : '') + 'เว็บที่เป็น "ไม่มีสิทธิ์" บัญชีนี้เข้าไม่ได้ ปุ่มด้านล่างบันทึกทันที ไม่ออกลิงก์ และไม่เปลี่ยน Password'
+        + (t.role === 'Admin' ? ' · บัญชีนี้มี Role Admin แต่ Role ของบัญชีไม่ได้ให้สิทธิ์เข้าเว็บ ต้องกำหนดที่นี่' : '');
+    $('web-actions').hidden = !o.web || !webs.length;
+    $('web-go').disabled = !ch.length || busy || !webColumn; $('web-go').textContent = busy && webBusy ? 'กำลังบันทึก…' : 'บันทึกสิทธิ์เว็บ';
+    $('web-why').textContent = !webColumn ? 'ต้องรัน setup ก่อน' : ch.length ? 'เปลี่ยน ' + ch.length + ' เว็บ' : 'ยังไม่มีการเปลี่ยนแปลง';
+    $('web-fail').hidden = !webFail; $('web-fail').textContent = webFail;
+    $('web-done').hidden = !webDone; $('web-done').textContent = webDone;
+  }
+  let webBusy = false;
+  $('web-rows').addEventListener('change', () => { webDone = ''; webFail = ''; draw(); });
+  $('web-go').addEventListener('click', async () => {
+    const t = target; if (!t || busy || !perm(t).web) return;
+    const ch = webChanged(); if (!ch.length) return;
+    busy = true; webBusy = true; webDone = ''; webFail = ''; draw();
+    try {
+      await api('admin.web', { ref: t.ref, web: Object.fromEntries(ch) });
+      busy = false; webBusy = false;
+      await load(t.ref);
+      webDone = 'บันทึกสิทธิ์เว็บแล้ว ' + ch.length + ' เว็บ มีผลทันที: ' + ch.map(([c, v]) => ((webs.find((w) => w.code === c) || {}).name || c) + ' = ' + (v || 'ไม่มีสิทธิ์')).join(', ');
+      draw();
+    } catch (er) { busy = false; webBusy = false; webFail = er.message || 'บันทึกไม่สำเร็จ ลองอีกครั้ง'; draw(); if (er.code === 'stale') load(t.ref); }
+  });
+  /* ---------- ข้อ 1.14.7: the list of webs ---------- */
+  function drawWL() {
+    $('wl').hidden = !webs;
+    if (!webs) return;
+    $('wl-nocol').hidden = webColumn;
+    $('wl-rows').innerHTML = webs.length ? webs.map((w) => '<tr><td class="m">' + esc(w.code) + '</td>'
+      + '<td><input type="text" data-wl-name="' + esc(w.code) + '" value="' + esc(w.name) + '" aria-label="ชื่อเว็บ ' + esc(w.code) + '" maxlength="100"></td>'
+      + '<td><input type="text" class="mono" data-wl-link="' + esc(w.code) + '" value="' + esc(w.link) + '" aria-label="ลิงก์ ' + esc(w.code) + '" spellcheck="false"></td>'
+      + '<td><span class="chip ' + (w.open ? 'ok' : 'warn') + '">' + (w.open ? 'เปิด' : 'ปิด') + '</span></td>'
+      + '<td><span class="actions"><button type="button" class="btn small" data-wl-save="' + esc(w.code) + '">บันทึก</button><button type="button" class="btn small ghost" data-wl-toggle="' + esc(w.code) + '">' + (w.open ? 'ปิดเว็บ' : 'เปิดเว็บ') + '</button></span></td></tr>').join('')
+      : '<tr><td colspan="5" class="hint">ยังไม่มีเว็บ</td></tr>';
+    document.querySelectorAll('#wl button, #wl input').forEach((x) => { x.disabled = busy; });
+    $('wl-fail').hidden = !wlFail; $('wl-fail').textContent = wlFail;
+    $('wl-done').hidden = !wlDone; $('wl-done').textContent = wlDone;
+  }
+  async function webList(o, ok) {
+    if (busy || !me.isSuper) return;
+    busy = true; wlFail = ''; wlDone = ''; drawWL();
+    try { await api('admin.webList', o); busy = false; await load(target && target.ref); wlDone = ok; }
+    catch (er) { busy = false; wlFail = er.code === 'no_change' ? '' : (er.message || 'บันทึกไม่สำเร็จ ลองอีกครั้ง'); if (er.code === 'no_change') wlDone = 'ยังไม่มีการเปลี่ยนแปลง'; }
+    drawWL(); draw();
+  }
+  $('wl-add').addEventListener('click', () => {
+    const code = $('wl-code').value.trim().toUpperCase(), name = $('wl-name').value.trim(), link = $('wl-link').value.trim();
+    webList({ act: 'add', code, name, link }, 'เพิ่มเว็บ ' + name + ' (' + code + ') แล้ว ยังไม่มีบัญชีใดมีสิทธิ์ ให้กำหนดที่ "สิทธิ์เข้าใช้งานเว็บ" ของแต่ละบัญชี')
+      .then(() => { if (!wlFail) ['wl-code', 'wl-name', 'wl-link'].forEach((id) => { $(id).value = ''; }); });
+  });
+  $('wl-rows').addEventListener('click', (e) => {
+    const sv = e.target.closest('[data-wl-save]'), tg = e.target.closest('[data-wl-toggle]');
+    if (sv) {
+      const c = sv.dataset.wlSave, row = sv.closest('tr');
+      webList({ act: 'edit', code: c, name: row.querySelector('[data-wl-name]').value.trim(), link: row.querySelector('[data-wl-link]').value.trim() }, 'บันทึก ' + c + ' แล้ว รหัสเว็บไม่เปลี่ยน สิทธิ์ของทุกบัญชียังเหมือนเดิม');
+    } else if (tg) {
+      const c = tg.dataset.wlToggle, w = webs.find((x) => x.code === c);
+      webList({ act: w.open ? 'close' : 'open', code: c }, (w.open ? 'ปิด' : 'เปิด') + 'เว็บ ' + w.name + ' แล้ว');
+    }
+  });
   const uval = () => $('uname').value.trim().toLowerCase();
   function userErr(u) {
     if (!u) return 'กรอก Username ก่อน';
@@ -239,14 +354,15 @@
     if (!t) {
       $('rights-h').textContent = 'สิทธิ์ของบัญชี ' + me.username;
       $('rights-body').innerHTML = me.isSuper
-        ? '<ul class="rules"><li>เปลี่ยน Role ของตัวเองไม่ได้</li><li>เปลี่ยน Role และ Reset Password ของทุกคนได้</li><li>เปลี่ยน Username ได้คนเดียว</li><li>ตั้งคนใหม่เป็น Admin ได้คนเดียว</li><li>ไม่มีวันสิ้นสุดการใช้งาน</li></ul>'
-        : '<ul class="rules"><li>เปลี่ยน Role และ Reset Password ของตัวเองได้</li><li>เปลี่ยน Username ของใครไม่ได้ รวมถึงของตัวเอง</li><li>แก้ไขบัญชี ' + esc(mainAdmin) + ' ไม่ได้ทุกกรณี</li><li>เปลี่ยน Role หรือ Reset Password ของ Admin คนอื่นไม่ได้</li><li>ให้สิทธิ์ได้เฉพาะ Editor และ Viewer</li></ul>';
+        ? '<ul class="rules"><li>เปลี่ยน Role ของตัวเองไม่ได้</li><li>เปลี่ยน Role และ Reset Password ของทุกคนได้</li><li>เปลี่ยน Username ได้คนเดียว</li><li>ตั้งคนใหม่เป็น Admin ได้คนเดียว</li><li>กำหนดสิทธิ์เข้าใช้งานเว็บ และจัดการรายชื่อเว็บได้คนเดียว</li><li>เข้าได้ทุกเว็บในฐานะ Admin เสมอ</li><li>ไม่มีวันสิ้นสุดการใช้งาน</li></ul>'
+        : '<ul class="rules"><li>Reset Password ของตัวเองได้ และลด Role ของตัวเองเป็น User ได้</li><li>ออก One Time Link, Reset Password และกำหนดวันสิ้นสุดการใช้งานของบัญชี User ได้</li><li>เปลี่ยน Username ของใครไม่ได้ รวมถึงของตัวเอง</li><li>แก้ไขบัญชี ' + esc(mainAdmin) + ' ไม่ได้ทุกกรณี</li><li>เปลี่ยน Role หรือ Reset Password ของ Admin คนอื่นไม่ได้</li><li>ตั้งใครเป็น Admin ไม่ได้</li></ul>';
       return;
     }
     const o = perm(t), row = (text, ok) => '<li><span>' + text + '</span><span class="chip ' + (ok ? 'ok' : 'bad') + '">' + (ok ? 'ได้' : 'ไม่ได้') + '</span></li>';
     $('rights-h').textContent = t.isMe ? 'สิทธิ์ของคุณกับบัญชีตัวเอง' : 'สิทธิ์ของคุณกับบัญชีนี้';
     $('rights-body').innerHTML = '<p class="hint"><span class="mono">' + esc(me.username) + '</span> กระทำต่อ <span class="mono">' + esc(t.username || '(ยังไม่มี Username)') + '</span></p><ul class="rights">'
-      + row(t.hasPw ? 'Reset Password' : 'สร้าง Password ครั้งแรก', o.link) + row('เปลี่ยน Username', o.user) + row('เปลี่ยน Role', o.role) + row('ตั้งเป็น Admin', o.admin) + row('กำหนดวันสิ้นสุดการใช้งาน', o.end) + '</ul>';
+      + row(t.hasPw ? 'Reset Password' : 'สร้าง Password ครั้งแรก', o.link) + row('เปลี่ยน Username', o.user) + row('เปลี่ยน Role (Admin / User)', o.roleSwap) + row('ตั้งเป็น Admin', o.admin) + row('กำหนดวันสิ้นสุดการใช้งาน', o.end)
+      + (me.isSuper ? row('กำหนดสิทธิ์เข้าใช้งานเว็บ', o.web) : '') + '</ul>';
   }
   function linkbox() {
     $('linkbox').hidden = !last; if (!last) return;
@@ -268,11 +384,12 @@
     $('me-name').textContent = me.username; $('me-role').textContent = me.role;
     drawBackup();
     $('selfc-main').textContent = mainAdmin;
-    rights(); linkbox();
+    rights(); linkbox(); drawWL();
     const t = target;
     $('after').hidden = !t; $('who-info').hidden = !t;
-    if (!t) return;
+    if (!t) { $('webbox').hidden = true; return; }
     const o = perm(t), m = curMode(), over = !t.isSuper && (t.endBad || (!!t.end && today > t.end));
+    drawWeb(o);
     $('who-info').innerHTML = (t.group ? '<span class="chip">' + esc(t.group) + '</span>' : '')
       + '<span class="chip ' + (t.role ? 'acc' : '') + '">Role: ' + esc(t.role || 'ยังไม่มี') + '</span>'
       + '<span class="chip ' + (t.hasPw ? 'ok' : 'warn') + '">Password: ' + (t.hasPw ? 'ตั้งแล้ว' : 'ยังไม่ตั้ง') + '</span>'
@@ -282,6 +399,7 @@
     $('miss').textContent = 'ข้อมูลของคนนี้ในชีทยังไม่ครบ ขาด: ' + t.missing.join(', ') + ' กรอกในชีทให้ครบก่อนจึงจะ Generate Link ได้';
     $('had').hidden = !t.hasPw || !!o.why;
     $('m-reset').checked = mode === 'reset'; $('m-role').checked = mode === 'role'; $('m-role').disabled = !o.role;
+    $('m-role-t').textContent = o.roleSwap || !o.role ? 'เปลี่ยน Role' : 'เปลี่ยนวันสิ้นสุดการใช้งาน';         // ข้อ 1.14.4.6
     const edited = renamed(), ue = userFail || (edited ? userErr(uval()) : '');
     $('uname').readOnly = !o.user || confirmUser || busy;
     $('uname-go').hidden = !o.user;
@@ -295,13 +413,14 @@
       : 'ต้องการกำหนด Username เป็น ' + uval() + ' หรือไม่';
     $('uname-yes').disabled = busy; $('uname-no').disabled = busy; $('uname-yes').textContent = busy && confirmUser ? 'กำลังบันทึก…' : 'ยืนยัน';
     $('uname-done').hidden = !userDone; $('uname-done').textContent = userDone;
-    $('role-hint').textContent = o.why ? '' : !o.role ? me.username + ' เปลี่ยน Role ของตัวเองไม่ได้' : m === 'role' ? 'บันทึกทันที ไม่ต้องตั้ง Password ใหม่' : 'บันทึกเมื่อกด Generate One Time Link';
+    $('role-hint').textContent = o.why ? '' : (!o.role ? me.username + ' เปลี่ยน Role ของตัวเองไม่ได้' : m === 'role' ? 'บันทึกทันที ไม่ต้องตั้ง Password ใหม่' : 'บันทึกเมื่อกด Generate One Time Link')
+      + ' · Role ของบัญชีบอกแค่ว่าเข้าหน้า Admin ได้หรือไม่' + (me.isSuper ? ' Role ในแต่ละเว็บกำหนดที่ "สิทธิ์เข้าใช้งานเว็บ"' : '');
     $('role').disabled = !o.role || busy;
     disableDP('end', !o.end);
     $('end-hint').textContent = t.isSuper ? 'บัญชีนี้ไม่มีวันสิ้นสุดการใช้งาน' : 'เว้นว่างทั้งสามช่อง = ไม่จำกัด ใช้งานได้ถึงสิ้นวันที่ระบุ และ Login ไม่ได้ตั้งแต่วันถัดไป';
     const p = problem();
     $('go').disabled = !!p || busy;
-    $('go').textContent = busy && !confirmUser ? 'กำลังบันทึก…' : m === 'role' ? 'บันทึก Role' : 'Generate One Time Link';
+    $('go').textContent = busy && !confirmUser && !webBusy ? 'กำลังบันทึก…' : m === 'role' ? (o.roleSwap ? 'บันทึก Role' : 'บันทึกวันสิ้นสุด') : 'Generate One Time Link';
     $('go-why').textContent = p && !o.why ? p : '';
     $('selfc').hidden = !confirmSelf; $('actions').hidden = confirmSelf;
     $('selfc-yes').disabled = busy; $('selfc-no').disabled = busy;
@@ -381,6 +500,8 @@
       return;
     }
     people = r.people; me = r.me; mainAdmin = r.mainAdmin; today = r.today; backup = r.backupEvents || [];
+    webs = Array.isArray(r.webs) ? r.webs : null; webColumn = r.webColumn !== false;
+    if (webs) $('sub').textContent = 'สร้าง Password ครั้งแรก, Reset Password, เปลี่ยน Role, เปลี่ยน Username, สิทธิ์เข้าใช้งานเว็บ และรายชื่อเว็บ';
     App.setUser(r.me, r.expiresAt);
     $('wait').hidden = true; $('denied').hidden = true; $('bench').hidden = false;
     pick(keepRef ? people.find((p) => p.ref === keepRef) || null : null);
