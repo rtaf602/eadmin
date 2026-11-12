@@ -237,7 +237,7 @@ const V = await device('viewer');
 await V.page.goto(ORIGIN + '/eadmin/index.html');
 await signIn(V.page, 'phum_s', PW.phum, 5);
 await V.page.waitForSelector('#inside:not([hidden])');
-check('the login page lists the calendar with its Role', /Master Plan 3 เดือน[\s\S]*Viewer/.test(await V.page.innerText('#in-webs')));
+check('the login page lists no webs after login', !/Master Plan 3 เดือน/.test(await V.page.content()));
 await V.page.goto(ORIGIN + '/3mcalendar/');
 await V.page.waitForFunction(() => document.querySelector('.statusline') && /Viewer/.test(document.querySelector('.statusline').innerText), null, { timeout: 15000 });
 check('Viewer: looks only; no edit button, no PREVIEW or export', !(await V.page.isVisible('#editBtn')) && !(await V.page.isVisible('#expBtn')) && !(await V.page.isVisible('#pvBtn')) && /ดูอย่างเดียว \(Viewer\)/.test(await V.page.innerText('.statusline')));
@@ -254,7 +254,7 @@ await N.page.waitForSelector('#lockGo:not([hidden])', { timeout: 15000 });
 check('no access: the plan is not shown, the agreed message, a way back to the login page', (await N.page.isHidden('#app')) && /บัญชีนี้ไม่มีสิทธิ์ใช้งานเว็บนี้ ให้ติดต่อ Admin/.test(await N.page.innerText('#lockErr')) && !/ภารกิจทดลอง/.test(await N.page.content()));
 await N.page.screenshot({ path: path.join(OUT, '3-noweb.png') });
 await N.page.click('#lockGo'); await N.page.waitForURL(ORIGIN + '/eadmin/index.html');
-check('…the way back leads to the login page, signed in, without a loop', /ยังไม่ได้รับสิทธิ์เข้าใช้งานเว็บใด/.test(await N.page.innerText('#inside')));
+check('…the way back leads to the login page, signed in, without a loop', (await N.page.isVisible('#inside')) && N.page.url() === ORIGIN + '/eadmin/index.html');
 
 // another device logs in with the editor's account: the calendar page shows the notice of the login system
 const B2 = await device('editor-2');

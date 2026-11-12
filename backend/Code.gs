@@ -458,10 +458,6 @@ function webs_(ctx) {
 function webOf_(ctx, code) { const c = str_(code).toUpperCase(); return webs_(ctx).list.filter(function (w) { return w.code === c; })[0] || null; }
 // the Role of this person in this web as written ('' none); the main administrator is Admin everywhere
 function webRole_(ctx, p, code) { return isSuper_(ctx, p) ? 'Admin' : (p.web[code] || ''); }
-// the webs this person can enter now, for the page shown after login (ข้อ 1.14.3.3)
-function myWebs_(ctx, p) {
-  return webs_(ctx).list.filter(function (w) { return w.open && webRole_(ctx, p, w.code); }).map(function (w) { return { code: w.code, name: w.name, link: w.link, role: webRole_(ctx, p, w.code) }; });
-}
 // For a page of a web, and for every request of a web that reads or writes its data: who is asking, and with which
 // Role in that web. Refused unless the web is open and the account has access to it (ข้อ 1.14.3.1, 1.14.3.5).
 // s: the session itself, already opened (see opWebCheck_); otherwise it is read from req
@@ -609,7 +605,8 @@ function device_(ctx, s, quiet) {
   if (st && st.s === s.s && st.q && st.q.seen) ctx.take = { rid: rid_(ctx, st.q.r), until: st.q.seen + OPT.takeoverSeconds * 1000 };
 }
 function admin_(ctx, req) { const a = auth_(ctx, req); if (!isAdmin_(a)) throw err_('forbidden', MSG.admin); return a; }
-function user_(ctx, p) { return { rank: p.rank, name: p.name, pos: p.pos, username: p.username, role: p.role, isSuper: isSuper_(ctx, p), webs: myWebs_(ctx, p) }; }
+// No list of the webs this account can use: not shown after login (user's decision, 12 พ.ย.); a web asks web.enter itself
+function user_(ctx, p) { return { rank: p.rank, name: p.name, pos: p.pos, username: p.username, role: p.role, isSuper: isSuper_(ctx, p) }; }
 
 // What the page uses to point at a row. It carries no ID number, and stops working when the row moves or changes owner.
 function ref_(ctx, p) { return p.row + '.' + sign_(ctx, 'row|' + p.row + '|' + p.idGov + '|' + p.name).slice(0, 20); }
