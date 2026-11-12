@@ -14,6 +14,16 @@
     <div>
       <p class="unit">ฝูง.602 บน.6</p>
       <h1 class="brand" id="brand">E ADMIN SITE <span>SQUADRON 602</span></h1>
+      <script>
+        // reached from the page of another web (?next=, the same check as App.next()): this is that web's login page.
+        // Named here, before the page is first drawn, so E ADMIN SITE is not seen while the scripts below still load.
+        (function () {
+          try {
+            var v = new URLSearchParams(location.search).get('next') || '';
+            if (/^\/(?!\/)[A-Za-z0-9._~%\-\/]{0,200}$/.test(v) && v.indexOf('..') < 0) { document.getElementById('brand').firstChild.textContent = 'LOGIN PAGE '; document.title = 'LOGIN PAGE · SQUADRON 602'; }
+          } catch (e) { /* the page script below names it once it has loaded */ }
+        })();
+      </script>
     </div>
   </header>
 

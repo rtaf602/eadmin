@@ -217,6 +217,24 @@ await A.page.goto(ORIGIN + '/3mcalendar/');
 await A.page.waitForURL(/\/eadmin\/index\.html\?next=/);
 check('no login: the calendar sends the browser to the login page, with the way back', A.page.url() === ORIGIN + '/eadmin/index.html?next=%2F3mcalendar%2F', A.page.url());
 check('…the login page reached from a web is titled LOGIN PAGE, not E ADMIN SITE', /^LOGIN PAGE\s+SQUADRON 602$/.test((await A.page.innerText('#brand')).trim()) && (await A.page.title()) === 'LOGIN PAGE · SQUADRON 602', await A.page.innerText('#brand'));
+{
+  // a slow phone: the shared script takes long to arrive. The name must already be LOGIN PAGE while it is on its way,
+  // not E ADMIN SITE until the script has run.
+  const S = await device('slow phone'); let release; const held = new Promise((r) => { release = r; });
+  await S.page.route('**/eadmin/assets/app.js', async (route) => { await held; await route.continue(); });
+  const seen = S.page.goto(ORIGIN + '/eadmin/index.html?next=' + encodeURIComponent('/app/'), { waitUntil: 'commit' });
+  await S.page.waitForSelector('#brand', { state: 'attached' }); await seen;
+  const early = { brand: (await S.page.textContent('#brand')).trim(), title: await S.page.title(), app: await S.page.evaluate(() => typeof window.App) };
+  check('slow phone: LOGIN PAGE from the first moment, before the shared script has arrived', early.app === 'undefined' && /^LOGIN PAGE\s+SQUADRON 602$/.test(early.brand) && early.title === 'LOGIN PAGE · SQUADRON 602', early);
+  release(); await S.page.waitForSelector('#login:not([hidden])');
+  const plain = await (await browser.newContext()).newPage();
+  await plain.goto(ORIGIN + '/eadmin/index.html');
+  check('opened directly (no ?next=): still E ADMIN SITE', /^E ADMIN SITE\s+SQUADRON 602$/.test((await plain.textContent('#brand')).trim()) && (await plain.title()) === 'E ADMIN SITE · SQUADRON 602', await plain.textContent('#brand'));
+  const bad2 = await (await browser.newContext()).newPage();
+  await bad2.goto(ORIGIN + '/eadmin/index.html?next=' + encodeURIComponent('//evil.example/x'));
+  check('a ?next= that leaves this site does not rename the page', /^E ADMIN SITE/.test((await bad2.textContent('#brand')).trim()), await bad2.textContent('#brand'));
+  await S.ctx.close();
+}
 await signIn(A.page, 'thana_t', PW.thana, 3);
 await A.page.waitForURL(ORIGIN + '/3mcalendar/');
 await A.page.waitForSelector('#editBtn', { timeout: 15000 });
