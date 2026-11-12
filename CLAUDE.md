@@ -95,10 +95,11 @@
 - เว็บเปิดเฉพาะเมื่อช่องสถานะเป็น `เปิด` พอดี ช่องว่างหรือข้อความอื่นถือว่าปิด; คนที่ไม่มีสิทธิ์ถามเว็บที่ปิดได้คำตอบเดียวกับเว็บที่ไม่มีอยู่ (เดารหัสไม่ได้)
 - Admin คนอื่นให้ Role `User` ได้เฉพาะบัญชีใหม่ที่ยังไม่มี Role และยังไม่เคยตั้ง Password; บัญชีที่ถูกลบ Role ออกต้องให้ Admin หลักคืนให้
 - รหัสเว็บ: อังกฤษตัวใหญ่ ตัวเลข ขีดล่าง 2–20 ตัว ขึ้นต้นด้วยตัวอักษร ลิงก์ต้องเป็น https:// ชื่อเว็บห้ามขึ้นต้นด้วย = + - @
-- **การต่อเว็บอื่นเข้ากับระบบนี้** (ทำแล้ว: 3mcalendar `WEB1`, a340_seatplan `WEB2`, a319_seatplan `WEB5`, a320-03_seatplan `WEB4`, a320-05_seatplan `WEB3` แต่ละ repo มี `CLAUDE.md` บอกส่วนที่ห้ามถอด):
+- **การต่อเว็บอื่นเข้ากับระบบนี้** (ทำแล้ว: 3mcalendar `WEB1`, a340_seatplan `WEB2`, a319_seatplan `WEB5`, a320-03_seatplan `WEB4`, a320-05_seatplan `WEB3`, overseas-mission `WEB10` แต่ละ repo มี `CLAUDE.md` บอกส่วนที่ห้ามถอด):
   หน้าของเว็บนั้นโหลด `/eadmin/assets/config.js` และ `/eadmin/assets/app.js` (GitHub Pages เดียวกัน `localStorage` จึงใช้ร่วมกัน) เรียก `App.watch()` และ `App.enterWeb(code)` (op `web.enter`)
   `web.enter` ตอบ Role และ **pass** (ลายมือชื่อชนิด `webpass` ผูกกับ session และรหัสเว็บ) หน้าเว็บส่ง pass (ไม่ใช่ session) ไประบบหลังบ้านของเว็บนั้น
-  ระบบหลังบ้านของเว็บนั้นถาม `web.check` `{ pass, web }` ด้วย `UrlFetchApp` ได้ `{ user: {rank,name,pos,username}, role, web, expiresAt }`
+  ระบบหลังบ้านของเว็บนั้นถาม `web.check` `{ pass, web }` ด้วย `UrlFetchApp` ได้ `{ user: {rank,name,pos,username}, role, super, web, expiresAt }`
+  `super` = บัญชีนี้เป็น Admin หลักหรือไม่ (overseas-mission ใช้จำกัดการวางลิงก์ปีงบใหม่ไว้ที่ Admin หลัก ผู้ใช้สั่ง 12 พ.ย.)
   pass ใช้เป็น session ไม่ได้ ใช้กับเว็บอื่นไม่ได้ คนที่แก้สคริปต์ของเว็บนั้นได้จึงเอาไปใช้กับหน้า Admin ไม่ได้ `web.check` ไม่นับเป็นการถามของเครื่อง (`quiet`: ไม่ประทับ `ds:` และ `q.seen`)
   เมื่อไม่มีการ Login `App.toLogin()` พาไป `index.html?next=<path>` แล้วหน้า Login พากลับหลัง Login (`App.next()` รับเฉพาะ path ของเว็บไซต์เดียวกัน)
   หน้า Login ที่มี `?next=` ชื่อ "LOGIN PAGE · SQUADRON 602" ตั้งแต่ก่อนหน้าแสดงครั้งแรก (สคริปต์สั้นต่อจาก `<h1>` ใช้เงื่อนไขเดียวกับ `App.next()`) ผู้ใช้เห็น E ADMIN SITE ค้างระหว่างโหลดบนมือถือ (12 พ.ย.)
@@ -157,6 +158,7 @@
 | `test/web_a319.mjs` | เว็บ a319_seatplan (`../a319_seatplan` หรือ `A319_DIR`) แบบเดียวกับ a340 แต่ผังที่นั่งของสคริปต์นั้นสร้างจาก Excel layout จึงแทนด้วยผังจำลองสองรายการ (Galley / ห้องน้ำ) |
 | `test/web_a320_03.mjs` | เว็บ a320-03_seatplan (`../a320-03_seatplan` หรือ `A32003_DIR`) แบบเดียวกับ a319 (Apps Script แก้ที่ `apps-script/server.js` แล้ว build เป็น Code.gs) |
 | `test/web_a320_05.mjs` | เว็บ a320-05_seatplan (`../a320-05_seatplan` หรือ `A32005_DIR`) แบบเดียวกับ a320-03 |
+| `test/web_overseas.mjs` | เว็บ overseas-mission (`../overseas-mission` หรือ `OM_DIR`) แบบเดียวกับ 3mcalendar: บัตรผ่าน, Editor / Viewer (ไม่มี PREVIEW และส่งออก) / ไม่มีสิทธิ์, ชื่อผู้บันทึกจากบัญชี, บันทึกการส่งออก, วางลิงก์ปีงบใหม่เฉพาะ Admin หลัก + รหัส admin, ออกจากระบบ |
 
 "ผ่าน" หมายถึง exit 0 และ `errors: []` ตัวจำลองตรวจตรรกะและรูปแบบข้อมูล แต่ไม่รู้เรื่องโควตา ความเร็ว และข้อความ error จริงของ Google
 ชุดทดสอบ **ไม่แตะ Google Sheet จริง**

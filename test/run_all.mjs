@@ -5,7 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 const dir = fileURLToPath(new URL('.', import.meta.url));
-const tests = ['auth_api', 'auth_site', 'web_3mcalendar', 'web_a340', 'web_a319', 'web_a320_03', 'web_a320_05'];      // the web_ ones are skipped without the repo next to this one
+const tests = ['auth_api', 'auth_site', 'web_3mcalendar', 'web_a340', 'web_a319', 'web_a320_03', 'web_a320_05', 'web_overseas'];      // the web_ ones are skipped without the repo next to this one
 const only = process.argv.slice(2);
 let bad = 0;
 for (const t of tests.filter((x) => !only.length || only.includes(x))) {
