@@ -233,6 +233,8 @@ check('…the login page reached from a web is titled LOGIN PAGE, not E ADMIN SI
   await plain.goto(ORIGIN + '/eadmin/index.html');
   check('opened directly (no ?next=): still E ADMIN SITE', /^E ADMIN SITE\s+SQUADRON 602$/.test((await plain.textContent('#brand')).trim()) && (await plain.title()) === 'E ADMIN SITE · SQUADRON 602', await plain.textContent('#brand'));
   check('…with the same crest', await logo(plain));
+  const inst = await plain.evaluate(() => ({ manifest: document.querySelector('link[rel=manifest]')?.getAttribute('href'), icon: document.querySelector('link[rel=apple-touch-icon]')?.getAttribute('href'), title: document.querySelector('meta[name=apple-mobile-web-app-title]')?.content }));
+  check('"Install" on the login page installs the OPS 602 app (its manifest and icon, from /app/)', inst.manifest === '/app/manifest.webmanifest' && inst.icon === '/app/icons/apple-touch-icon.png' && inst.title === 'OPS 602', inst);
   const bad2 = await (await browser.newContext()).newPage();
   await bad2.goto(ORIGIN + '/eadmin/index.html?next=' + encodeURIComponent('//evil.example/x'));
   check('a ?next= that leaves this site does not rename the page', /^E ADMIN SITE/.test((await bad2.textContent('#brand')).trim()), await bad2.textContent('#brand'));
