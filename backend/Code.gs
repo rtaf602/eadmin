@@ -982,7 +982,8 @@ function opWebCheck_(ctx, req) {
   if (!(+w.e > ctx.now)) throw err_('auth', MSG.timeout);
   const r = webAuth_(ctx, req, code, true, { i: w.i, e: w.e, p: w.p, s: w.s });
   ctx.exp = +w.e;
-  return { user: { rank: r.p.rank, name: r.p.name, pos: r.p.pos, username: r.p.username }, role: r.role, web: { code: r.web.code, name: r.web.name }, expiresAt: ctx.exp };
+  // super: this is the main admin (SETUP.superAdmin). A web may keep a task for that account alone (overseas-mission: the links of a new fiscal year)
+  return { user: { rank: r.p.rank, name: r.p.name, pos: r.p.pos, username: r.p.username }, role: r.role, super: isSuper_(ctx, r.p), web: { code: r.web.code, name: r.web.name }, expiresAt: ctx.exp };
 }
 
 function opLinkInfo_(ctx, req) {
