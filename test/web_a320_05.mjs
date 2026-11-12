@@ -128,7 +128,9 @@ const lT = cpost({ action: 'load', pass: T });
 check('Editor: the seats, and the name from the column ชื่อ-สกุล with the Role; no PIN asked; no clearing', lT.ok && lT.me.name === 'ธนา ทดลองกิจ' && lT.me.role === 'Editor' && 'LAV-A' in lT.seats && lT.pinRequired === false && lT.resetEnabled === false, lT.me);
 const lP = cpost({ action: 'load', pass: P });
 check('Viewer: may look', lP.ok && lP.me.role === 'Viewer');
-check('Viewer cannot SAVE, clear, read the whole history or log an export', ['save', 'reset', 'history', 'exported'].every((a) => ce(cpost({ action: a, pass: P, changes: [], kind: 'EXPORT TO EXCEL' })) === 'forbidden'));
+check('Viewer cannot SAVE or clear', ['save', 'reset'].every((a) => ce(cpost({ action: a, pass: P, changes: [] })) === 'forbidden'));
+{ const vh = cpost({ action: 'history', pass: P }); const ve = cpost({ action: 'exported', pass: P, kind: 'EXPORT TO EXCEL', filename: 'viewer.xlsx' });
+  check('Viewer may read the history (for EXPORT TO EXCEL) and log an export under the account name', vh.ok && Array.isArray(vh.rows) && ve.ok && J(tabs['ประวัติการส่งออก'].rows).includes('viewer.xlsx') && tabs['ประวัติการส่งออก'].rows.some((r) => r[3] === 'Viewer' && r[4] === 'EXPORT TO EXCEL'), [vh, ve]); }
 const sv = cpost({ action: 'save', pass: T, by: 'ชื่อปลอม', changes: [{ id: 'LAV-A', s: 2, m: 0, note: 'ชักโครกตัน', fields: ['s', 'note'], base: { s: 0, m: 0, note: '' } }] });
 const log = () => tabs[LOG].rows.slice(1).filter((r) => r && r[0]);
 check('Editor SAVE: written to the map, the history carries the name from the login, not the one the page sends', sv.ok && sv.saved === 1 && tabs[MAP].rows[29][3] === 'ใช้งานไม่ได้' && log().filter((r) => r[3] === 'LAVATORY A').length === 2 && log().filter((r) => r[3] === 'LAVATORY A').every((r) => r[2] === 'ธนา ทดลองกิจ') && !J(tabs[LOG].rows).includes('ชื่อปลอม') && sv.lastSave.by === 'ธนา ทดลองกิจ', [sv, log().slice(-2)]);
@@ -200,8 +202,11 @@ const V = await device('viewer');
 await V.page.goto(ORIGIN + '/a320-05_seatplan/'); await V.page.waitForURL(/next=/);
 await signIn(V.page, 'phum_s', PW.phum, 5); await V.page.waitForURL(ORIGIN + '/a320-05_seatplan/');
 await V.page.waitForFunction(() => document.getElementById('inspector').value !== '', null, { timeout: 15000 });
-check('Viewer: looks only; no SAVE, CLEAR, PREVIEW or export buttons, and says so', ['#bSave', '#bClear', '#bPreview', '#bPdf', '#bPdf2', '#bXls'].every((x) => true) && !(await V.page.isVisible('#bSave')) && !(await V.page.isVisible('#bXls')) && !(await V.page.isVisible('#bPdf')) && /ดูอย่างเดียว \(Viewer\)/.test(await V.page.innerText('#notice')));
+check('Viewer: no SAVE, CLEAR or PREVIEW; the three export buttons are there, and the notice says so', !(await V.page.isVisible('#bSave')) && !(await V.page.isVisible('#bClear')) && !(await V.page.isVisible('#bPreview')) && (await V.page.isVisible('#bXls')) && (await V.page.isVisible('#bPdf')) && (await V.page.isVisible('#bPdf2')) && /Viewer ดูและส่งออก PDF \/ Excel ได้/.test(await V.page.innerText('#notice')));
 await V.page.screenshot({ path: path.join(OUT, '2-viewer.png') });
+await V.page.route(/cdnjs\.cloudflare\.com\/ajax\/libs\/exceljs/, (r) => r.fulfill({ contentType: 'text/javascript', body: `(function(){var mk=function(){return new Proxy(function(){},{get:function(t,k){if(k==='then')return undefined;if(k==='writeBuffer')return function(){return Promise.resolve(new ArrayBuffer(8))};if(k===Symbol.toPrimitive)return function(){return 0};if(k===Symbol.iterator)return function*(){};return mk()},apply:function(){return mk()},construct:function(){return mk()},set:function(){return true}})};window.ExcelJS={Workbook:mk()}})();` }));
+{ const n1 = exl().length; const vdl = V.page.waitForEvent('download'); await V.page.click('#bXls'); await vdl; await V.page.waitForTimeout(1200);
+  check('Viewer: EXPORT TO EXCEL on the page gives the file, and a line in ประวัติการส่งออก as Viewer', exl().length === n1 + 1 && exl().slice(-1)[0][3] === 'Viewer' && exl().slice(-1)[0][4] === 'EXPORT TO EXCEL' && /\.xlsx$/.test(exl().slice(-1)[0][5]), exl().slice(-1)); }
 
 const N = await device('noweb');
 await N.page.goto(ORIGIN + '/a320-05_seatplan/'); await N.page.waitForURL(/next=/);
