@@ -158,7 +158,7 @@
 | `test/web_a319.mjs` | เว็บ a319_seatplan (`../a319_seatplan` หรือ `A319_DIR`) แบบเดียวกับ a340 แต่ผังที่นั่งของสคริปต์นั้นสร้างจาก Excel layout จึงแทนด้วยผังจำลองสองรายการ (Galley / ห้องน้ำ) |
 | `test/web_a320_03.mjs` | เว็บ a320-03_seatplan (`../a320-03_seatplan` หรือ `A32003_DIR`) แบบเดียวกับ a319 (Apps Script แก้ที่ `apps-script/server.js` แล้ว build เป็น Code.gs) |
 | `test/web_a320_05.mjs` | เว็บ a320-05_seatplan (`../a320-05_seatplan` หรือ `A32005_DIR`) แบบเดียวกับ a320-03 |
-| `test/web_overseas.mjs` | เว็บ overseas-mission (`../overseas-mission` หรือ `OM_DIR`) แบบเดียวกับ 3mcalendar: บัตรผ่าน, Editor / Viewer (ไม่มี PREVIEW และส่งออก) / ไม่มีสิทธิ์, ชื่อผู้บันทึกจากบัญชี, บันทึกการส่งออก, วางลิงก์ปีงบใหม่เฉพาะ Admin หลัก + รหัส admin, Editor แก้ได้เฉพาะภารกิจที่ตนเป็นผู้รับผิดชอบ (ยศชื่อ ส.) และการเติมสกุลย่อให้ชื่อเดิม, ออกจากระบบ |
+| `test/web_overseas.mjs` | เว็บ overseas-mission (`../overseas-mission` หรือ `OM_DIR`) แบบเดียวกับ 3mcalendar: บัตรผ่าน, Editor / Viewer (ไม่มี PREVIEW และส่งออก) / ไม่มีสิทธิ์, ชื่อผู้บันทึกจากบัญชี, บันทึกการส่งออก, วางลิงก์ปีงบใหม่เฉพาะ Admin หลัก + รหัส admin, Editor แก้ได้เฉพาะภารกิจที่ตนเป็นผู้รับผิดชอบ (ยศชื่อ), ออกจากระบบ |
 
 "ผ่าน" หมายถึง exit 0 และ `errors: []` ตัวจำลองตรวจตรรกะและรูปแบบข้อมูล แต่ไม่รู้เรื่องโควตา ความเร็ว และข้อความ error จริงของ Google
 ชุดทดสอบ **ไม่แตะ Google Sheet จริง**
