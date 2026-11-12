@@ -409,6 +409,9 @@ sim.setup({});
 check('running setup again adds nothing twice', main().filter((r) => r.includes('สิทธิ์เว็บ')).length === heads.length && sim.tabs(DB).filter((t) => t.name === 'WEB LIST').length === 1);
 const wl = (session, o) => post('admin.webList', Object.assign({ session }, o));
 const enter = (session, web) => post('web.enter', { session, web });
+// web.mine: what the page OPS 602 (repo app) asks once, to show the icons of the webs this account may use (12 พ.ย.)
+const mine = (session) => post('web.mine', { session });
+const mineOf = (r) => (r.ok ? r.webs.map((w) => w.code + ':' + w.role).join(',') : code(r));
 // what a login can do in each web, asked web by web (the login answer itself carries no list of webs, 12 พ.ย.)
 const rolesOf = (session, codes) => (codes || ['AIRCRAFT', 'REPORT']).map((c) => { const r = enter(session, c); return c + ':' + (r.ok ? r.web.role : code(r)); }).filter((x) => !/:(no_web|web_closed)$/.test(x));
 const tS = login('thana_t', PW.thana, 3);
@@ -450,8 +453,13 @@ check('a web nobody has heard of: the same answer as no access', code(enter(tT, 
 check('1.14.7.3 name and link changed, the code stays: WEB_CHANGED, and the access is untouched', wl(S, { act: 'edit', code: 'AIRCRAFT', name: 'สถานภาพอากาศยาน ฝูง.602', link: 'https://example.github.io/ac/' }).ok && lastLog()[2] === 'WEB_CHANGED' && cell('thana_t', 16) === 'AIRCRAFT=Editor; REPORT=Viewer' && enter(tT, 'AIRCRAFT').web.name === 'สถานภาพอากาศยาน ฝูง.602' && code(wl(S, { act: 'edit', code: 'AIRCRAFT', name: 'สถานภาพอากาศยาน ฝูง.602', link: 'https://example.github.io/ac/' })) === 'no_change');
 check('…a web that is not there cannot be edited', code(wl(S, { act: 'edit', code: 'NOPE', name: 'x', link: 'https://x/' })) === 'bad_web');
 check('1.14.7.4 a web closed: WEB_CLOSED; nobody enters it, the main admin neither; gone from the list after login', wl(S, { act: 'close', code: 'AIRCRAFT' }).ok && lastLog()[2] === 'WEB_CLOSED' && code(enter(tT, 'AIRCRAFT')) === 'web_closed' && code(enter(S, 'AIRCRAFT')) === 'web_closed' && J(rolesOf(tT)) === J(['REPORT:Viewer']) && code(wl(S, { act: 'close', code: 'AIRCRAFT' })) === 'no_change');
+check('web.mine leaves out a closed web, for the main admin too', mineOf(mine(tT)) === 'REPORT:Viewer' && mineOf(mine(S)) === 'REPORT:Admin', [mineOf(mine(tT)), mineOf(mine(S))]);
 check('…the access written for it is kept, and can still be changed', cell('thana_t', 16) === 'AIRCRAFT=Editor; REPORT=Viewer' && J(list(S).people.find((p) => p.username === 'thana_t').web) === J({ AIRCRAFT: 'Editor', REPORT: 'Viewer' }));
 check('…opened again: WEB_OPENED, the old access is back', wl(S, { act: 'open', code: 'AIRCRAFT' }).ok && lastLog()[2] === 'WEB_OPENED' && enter(tT, 'AIRCRAFT').web.role === 'Editor');
+const mT2 = mine(tT);
+check('web.mine: the open webs this account may use, each with its Role, and who it is', mineOf(mT2) === 'AIRCRAFT:Editor,REPORT:Viewer' && mT2.user.username === 'thana_t' && mT2.expiresAt > 0, mT2);
+check('…only the code and the Role: no name, no link', mT2.webs.every((w) => J(Object.keys(w).sort()) === J(['code', 'role'])) && !/example\.github\.io|สถานภาพ/.test(J(mT2.webs)));
+check('…the main admin: every open web as Admin; an account with no web: an empty list; no session: refused', mineOf(mine(S)) === 'AIRCRAFT:Admin,REPORT:Admin' && mineOf(mine(sSom.session)) === '' && mine(sSom.session).ok && code(mine('')) === 'auth');
 check('1.14.3.4 access taken away: the open login is refused at its next request', wa(S, 'thana_t', { AIRCRAFT: '' }).ok && cell('thana_t', 16) === 'REPORT=Viewer' && code(enter(tT, 'AIRCRAFT')) === 'no_web' && enter(tT, 'REPORT').ok);
 rowOf(sim, 'thana_t').cells[16] = 'aircraft=editor, junk; REPORT = viewer ; X=Boss';
 check('a cell written by hand: what can be read is read, the rest is left out', J(rolesOf(tT)) === J(['AIRCRAFT:Editor', 'REPORT:Viewer']));

@@ -248,7 +248,7 @@ function asError_(x) {
 const OPS = {
   'info': opInfo_, 'login': opLogin_, 'login.wait': opLoginWait_, 'login.cancel': opLoginCancel_, 'me': opMe_, 'ping': opPing_, 'session.deny': opDeny_, 'logout': opLogout_,
   'link.info': opLinkInfo_, 'link.use': opLinkUse_,
-  'web.enter': opWebEnter_, 'web.check': opWebCheck_,
+  'web.enter': opWebEnter_, 'web.check': opWebCheck_, 'web.mine': opWebMine_,
   'admin.list': opAdminList_, 'admin.link': opAdminLink_, 'admin.role': opAdminRole_, 'admin.username': opAdminUsername_, 'admin.backupAck': opBackupAck_,
   'admin.web': opAdminWeb_, 'admin.webList': opAdminWebList_,
 };
@@ -955,6 +955,19 @@ function opWebEnter_(ctx, req) {
   const r = webAuth_(ctx, req, req.web), s = token_(ctx, req);
   const pass = seal_(ctx, 'webpass', { i: s.i, e: s.e, p: s.p, s: s.s, w: r.web.code });
   return { user: user_(ctx, r.p), expiresAt: ctx.exp, web: { code: r.web.code, name: r.web.name, link: r.web.link, role: r.role }, pass: pass };
+}
+
+// The page OPS 602 (repo app, /app/) asks once when it opens: which webs may this account use? So that it shows the icons
+// of those webs only (ผู้ใช้ขอ 12 พ.ย.). Answers the code and the Role of each web that is open and where this account has
+// a Role (the main administrator: every open web, as Admin). Nothing about the other webs, closed or unknown or without
+// access, so their codes cannot be learnt here, and no name or link. The E ADMIN page still shows no list of webs, and
+// every web still checks its own access with web.enter: this list only decides which icons the page shows.
+function opWebMine_(ctx, req) {
+  const p = auth_(ctx, req);
+  const webs = webs_(ctx).list.filter(function (w) { return w.open; })
+    .map(function (w) { return { code: w.code, role: webRole_(ctx, p, w.code) }; })
+    .filter(function (w) { return !!w.role; });
+  return { user: user_(ctx, p), expiresAt: ctx.exp, webs: webs };
 }
 
 // The back end of a web asks, for a request it has received with a pass: may it go on, and as whom (ข้อ 1.14.3.5)?
