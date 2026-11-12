@@ -31,7 +31,7 @@ const site = http.createServer((req, res) => {
   if (p.startsWith('/eadmin/')) file = path.join(EAD, 'docs', path.normalize(p.slice(8)));
   else if (p.startsWith('/3mcalendar/')) file = path.join(CAL, path.normalize(p.slice(12)));
   if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); res.end('nf'); return; }
-  const t = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.ttf': 'font/ttf' }[path.extname(file)] || 'application/octet-stream';
+  const t = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.ttf': 'font/ttf', '.svg': 'image/svg+xml' }[path.extname(file)] || 'application/octet-stream';
   res.writeHead(200, { 'Content-Type': t }); res.end(fs.readFileSync(file));
 });
 await new Promise((r) => site.listen(0, '127.0.0.1', r));
@@ -227,9 +227,12 @@ check('…the login page reached from a web is titled LOGIN PAGE, not E ADMIN SI
   const early = { brand: (await S.page.textContent('#brand')).trim(), title: await S.page.title(), app: await S.page.evaluate(() => typeof window.App) };
   check('slow phone: LOGIN PAGE from the first moment, before the shared script has arrived', early.app === 'undefined' && /^LOGIN PAGE\s+SQUADRON 602$/.test(early.brand) && early.title === 'LOGIN PAGE · SQUADRON 602', early);
   release(); await S.page.waitForSelector('#login:not([hidden])');
+  const logo = async (pg) => pg.$eval('.mast .logo', (i) => i.complete && i.naturalWidth > 0 && i.getBoundingClientRect().width >= 60);
+  check('the login page shows the crest of ฝูง.602 (the logo of the OPS 602 app)', await logo(S.page));
   const plain = await (await browser.newContext()).newPage();
   await plain.goto(ORIGIN + '/eadmin/index.html');
   check('opened directly (no ?next=): still E ADMIN SITE', /^E ADMIN SITE\s+SQUADRON 602$/.test((await plain.textContent('#brand')).trim()) && (await plain.title()) === 'E ADMIN SITE · SQUADRON 602', await plain.textContent('#brand'));
+  check('…with the same crest', await logo(plain));
   const bad2 = await (await browser.newContext()).newPage();
   await bad2.goto(ORIGIN + '/eadmin/index.html?next=' + encodeURIComponent('//evil.example/x'));
   check('a ?next= that leaves this site does not rename the page', /^E ADMIN SITE/.test((await bad2.textContent('#brand')).trim()), await bad2.textContent('#brand'));

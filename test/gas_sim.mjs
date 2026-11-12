@@ -186,7 +186,7 @@ export async function startSim(opts = {}) {
   });
   await new Promise((r) => app.listen(0, '127.0.0.1', r));
   sim.backendUrl = 'http://127.0.0.1:' + app.address().port + '/exec';
-  const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8' };
+  const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
   const web = http.createServer((req, res) => {
     let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
     if (p.endsWith('/')) p += 'index.html';
