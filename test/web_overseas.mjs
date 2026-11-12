@@ -165,10 +165,15 @@ check('an Admin of this web writes any mission and names anyone as ผู้ร�
 const eTry = (ops) => ce(opost({ action: 'write', pass: T, fy: 70, ops }));
 check('Editor: a mission of somebody else cannot be edited (not_owner), nor replaced', eTry([{ op: 'update', id: 'm2', fy: 70, data: { route: 'X' } }]) === 'not_owner' && eTry([{ op: 'set', id: 'm2', fy: 70, data: { owner: 'น.อ.ธนา' } }]) === 'not_owner' && m1b().find((m) => m.id === 'm2').route === 'BKK-NRT');
 check('Editor: deletes nothing, not even its own', eTry([{ op: 'delete', id: 'm1', fy: 70 }]) === 'not_owner' && !!m1b().find((m) => m.id === 'm1'));
-check('Editor: cannot hand its mission to somebody else', eTry([{ op: 'update', id: 'm1', fy: 70, data: { owner: 'ร.อ.ชาญ' } }]) === 'not_owner');
 const mv = opost({ action: 'write', pass: T, fy: 70, ops: [{ op: 'update', id: 'm1', fy: 70, data: { order: 2.5, route: 'BKK-HND' } }] });
 check('Editor: edits and moves its own mission (only that row changes)', mv.ok && m1b().find((m) => m.id === 'm1').order === 2.5 && m1b().find((m) => m.id === 'm1').route === 'BKK-HND' && m1b().find((m) => m.id === 'm2').order === 2, m1b().map((m) => [m.id, m.order]));
 check('Editor: a mission written by an Admin with its name (spaces aside) is its own', !opost({ action: 'write', pass: T, fy: 70, ops: [{ op: 'update', id: 'm3', fy: 70, data: { pax: '5' } }] }).error);
+const ho = opost({ action: 'write', pass: T, fy: 70, ops: [{ op: 'update', id: 'm3', fy: 70, data: { owner: 'ร.อ.ชาญ' } }] });
+check('Editor: may hand its own mission to somebody else (ผู้รับผิดชอบ changed) …', ho.ok && m1b().find((m) => m.id === 'm3').owner === 'ร.อ.ชาญ', ho);
+check('…and after that cannot edit it, nor take it back', eTry([{ op: 'update', id: 'm3', fy: 70, data: { pax: '9' } }]) === 'not_owner' && eTry([{ op: 'update', id: 'm3', fy: 70, data: { owner: 'น.อ.ธนา' } }]) === 'not_owner');
+check('…the other way round: cannot hand over a mission of somebody else', eTry([{ op: 'update', id: 'm2', fy: 70, data: { owner: 'น.อ.ธนา' } }]) === 'not_owner');
+// holidays: the main admin only
+check('holidays: an Editor cannot change them; the main admin can', ce(opost({ action: 'setHolidays', pass: T, map: { '2026-12-10': 'วันรัฐธรรมนูญ' } })) === 'not_super' && !opost({ action: 'setHolidays', pass: A0, map: { '2026-12-10': 'วันรัฐธรรมนูญ' } }).error);
 const f0 = fetches; for (let i = 0; i < 5; i++) opost({ action: 'sync', pass: P, ver: 0 });
 check('frequent syncs ask the login system at most once per minute', fetches - f0 === 0, fetches - f0);
 const f1 = fetches; opost({ action: 'write', pass: T, fy: 70, ops: [] });
@@ -176,10 +181,11 @@ check('every write asks the login system afresh', fetches - f1 === 1, fetches - 
 const sv = opost({ action: 'save', pass: T, fy: 70, label: 'ฉบับทดลอง', at: '2026-11-12T10:00:00Z', xlsx: '', filename: 'x' });
 const snaps = opost({ action: 'listSnaps', pass: P, fy: 70 }).list;
 check('a version kept by the editor carries the account name', sv.ok && snaps[0] && snaps[0].byName !== undefined ? snaps[0].byName === 'ธนา ทดลองกิจ' : (sv.snap && sv.snap.by === 'ธนา ทดลองกิจ'), [sv.snap, snaps[0]]);
-const ex1 = opost({ action: 'exported', pass: T, fy: 70, kind: 'pdf', filename: 'plan.pdf' }), ex2 = opost({ action: 'exported', pass: T, fy: 70, kind: 'xlsx', filename: 'plan.xlsx' });
+check('PREVIEW / export: an Editor (or an Admin of this web who is not the main admin) cannot log an export', ce(opost({ action: 'exported', pass: T, fy: 70, kind: 'pdf', filename: 'x.pdf' })) === 'not_super');
+const ex1 = opost({ action: 'exported', pass: A0, fy: 70, kind: 'pdf', filename: 'plan.pdf' }), ex2 = opost({ action: 'exported', pass: A0, fy: 70, kind: 'xlsx', filename: 'plan.xlsx' });
 const lg2 = opost({ action: 'listLogs', pass: P, fy: 70 }).list;
-check('EXPORT TO PDF / EXCEL: in the history with the name from the column ชื่อ-สกุล', ex1.ok && ex2.ok && lg2[0].action === 'export' && lg2[0].field === 'EXPORT TO EXCEL' && lg2[0].label === 'plan.xlsx' && lg2[0].byName === 'ธนา ทดลองกิจ' && lg2[1].field === 'EXPORT TO PDF', lg2.slice(0, 2));
-check('…an unknown kind of file is refused', ce(opost({ action: 'exported', pass: T, fy: 70, kind: 'doc', filename: 'x' })) === 'bad_request');
+check('EXPORT TO PDF / EXCEL by the main admin: in the history with the name from the column ชื่อ-สกุล', ex1.ok && ex2.ok && lg2[0].action === 'export' && lg2[0].field === 'EXPORT TO EXCEL' && lg2[0].label === 'plan.xlsx' && lg2[0].byName === 'ชาญ ตัวอย่างหลัก' && lg2[1].field === 'EXPORT TO PDF', lg2.slice(0, 2));
+check('…an unknown kind of file is refused', ce(opost({ action: 'exported', pass: A0, fy: 70, kind: 'doc', filename: 'x' })) === 'bad_request');
 // the links of a new fiscal year: the main admin only, and the admin code as well
 const LINK = (c) => 'https://docs.google.com/spreadsheets/d/' + c.repeat(30) + '/edit';
 post('admin.web', { session: S, ref: ref('thana_t'), web: { [WEB]: 'Admin' } });
@@ -247,18 +253,20 @@ await signIn(E.page, 'thana_t', PW.thana, 3);
 await E.page.waitForURL(ORIGIN + '/overseas-mission/');
 await E.page.waitForSelector('#editBtn', { timeout: 15000 });
 check('after the login: back on the page, the plan shown, the account name at the top', (await E.page.isHidden('#lock')) && /ผู้ใช้งาน: ธนา ทดลองกิจ/.test(await E.page.innerText('#who')) && /TEST01/.test(await E.page.innerText('#app')));
-check('Editor: edit, PREVIEW and export are there; the sign-out button', (await E.page.isVisible('#editBtn')) && (await E.page.isVisible('#pvBtn')) && (await E.page.isVisible('#expBtn')) && /ออกจากระบบ/.test(await E.page.innerText('#lockBtn')));
+check('Editor: the edit button and sign-out; no PREVIEW or export buttons (main admin only)', (await E.page.isVisible('#editBtn')) && !(await E.page.isVisible('#pvBtn')) && !(await E.page.isVisible('#expBtn')) && /ออกจากระบบ/.test(await E.page.innerText('#lockBtn')));
 await E.page.screenshot({ path: path.join(OUT, '1-editor.png') });
-const n0 = omLog().length;
-await E.page.click('#expBtn'); const dl = E.page.waitForEvent('download'); await E.page.click('.pop .mi:has-text("EXPORT TO EXCEL")'); await dl;
-await E.page.waitForTimeout(1500);
-const lgB = omLog();
-check('in the page: EXPORT TO EXCEL clicked → the file, and a line in the history with the account name', lgB.length === n0 + 1 && lgB[0].action === 'export' && lgB[0].by === 'ธนา ทดลองกิจ' && /EXPORT TO EXCEL/.test(lgB[0].detail) && /\.xlsx/.test(lgB[0].detail), lgB[0]);
 await E.page.click('#editBtn'); await E.page.waitForSelector('#addBtn', { timeout: 10000 });
 await E.page.click('#addBtn'); await E.page.waitForTimeout(2500);
 const rowState = (cs) => E.page.evaluate((cs) => { const tr = [...document.querySelectorAll('#rows tr')].find((t) => { const i = t.querySelector('.in[data-f="callsign"]'); return i && i.value === cs; }); if (!tr) return null; return { callsign: tr.querySelector('.in[data-f="callsign"]').disabled, owner: tr.querySelector('.in[data-f="owner"]').disabled, up: tr.firstChild.querySelectorAll('button')[0].disabled, del: tr.querySelector('td.del button').hidden }; }, cs);
 const own = await rowState('TEST01'), other = await rowState('OTHER02');
-check('Editor in edit mode: its own mission can be edited and moved (owner fixed), somebody else\'s is locked; no delete button', own && !own.callsign && own.owner && other && other.callsign && other.up && own.del && other.del, [own, other]);
+check('Editor in edit mode: its own mission can be edited, moved and handed over, somebody else\'s is locked; no delete button', own && !own.callsign && !own.owner && other && other.callsign && other.up && own.del && other.del, [own, other]);
+{
+  const inp = await E.page.evaluateHandle(() => [...document.querySelectorAll('#rows tr')].find((t) => (t.querySelector('.in[data-f="callsign"]') || {}).value === 'TEST01').querySelector('.in[data-f="owner"]'));
+  await inp.asElement().fill('ร.อ.ชาญ'); await inp.asElement().evaluate((el) => el.dispatchEvent(new Event('change', { bubbles: true })));
+  await E.page.waitForTimeout(2500);
+  const after = await rowState('TEST01'), srv = vm.runInContext('readMissions_("70")', octx).find((m) => m.id === 'm1');
+  check('in the page: the Editor hands TEST01 over → stored, said so, and the row is locked for that Editor from then on', srv && srv.owner === 'ร.อ.ชาญ' && after && after.callsign && after.up && /มอบภารกิจให้ ร\.อ\.ชาญ แล้ว/.test(await E.page.innerText('body')), [srv && srv.owner, after]);
+}
 const newRow = Object.values((books[SRC].missions || { rows: [] }).rows).slice(1).find((r) => r && r[0] && !['m1', 'm2', 'm3', 'id'].includes(r[0]));
 const head = books[SRC].missions.rows[0];
 check('Editor adds a mission from the page: stored under the account name, as its own (ผู้รับผิดชอบ)', !!newRow && newRow[head.indexOf('updatedByName')] === 'ธนา ทดลองกิจ' && newRow[head.indexOf('owner')] === 'น.อ.ธนา', newRow);
@@ -292,6 +300,13 @@ await A.page.fill('#ffSrc', LINK('c')); await A.page.fill('#ffDisp', LINK('d'));
 await A.page.click('#ffSave'); await A.page.waitForTimeout(2500);
 check('…pasted from the page with the admin code: kept', J(oprops.FILES || '').includes('cccc'), oprops.FILES);
 await A.page.screenshot({ path: path.join(OUT, '4-main-admin-files.png') });
+await A.page.keyboard.press('Escape'); await A.page.click('#pClose').catch(() => {});
+check('the main admin: PREVIEW and export buttons are there', (await A.page.isVisible('#pvBtn')) && (await A.page.isVisible('#expBtn')));
+const n0 = omLog().length;
+await A.page.click('#expBtn'); const dl = A.page.waitForEvent('download'); await A.page.click('.pop .mi:has-text("EXPORT TO EXCEL")'); await dl;
+await A.page.waitForTimeout(1500);
+const lgB = omLog();
+check('in the page: EXPORT TO EXCEL clicked by the main admin → the file, and a line in the history with the account name', lgB.length === n0 + 1 && lgB[0].action === 'export' && lgB[0].by === 'ชาญ ตัวอย่างหลัก' && /EXPORT TO EXCEL/.test(lgB[0].detail), lgB[0]);
 
 // sign out on this page: every tab of that browser is at the login page
 const E2 = await E.ctx.newPage();
