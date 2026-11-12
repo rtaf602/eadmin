@@ -181,7 +181,7 @@ check('no login: to the login page titled LOGIN PAGE, with the way back', A.page
 await signIn(A.page, 'thana_t', PW.thana, 3);
 await A.page.waitForURL(ORIGIN + '/a320-03_seatplan/');
 await A.page.waitForFunction(() => document.getElementById('inspector').value !== '', null, { timeout: 15000 });
-check('after the login: back on the seat plan, no PIN screen, the inspector is the account name (not typed), Role shown', (await A.page.isHidden('#gate')) && (await A.page.inputValue('#inspector')) === 'ธนา ทดลองกิจ' && (await A.page.getAttribute('#inspector', 'readonly')) !== null && /Editor/.test(await A.page.innerText('#role')) && !(await A.page.isVisible('#pinDlg')));
+check('after the login: back on the seat plan, no PIN screen, the inspector is the account name (not typed, the field not shown), Role shown', (await A.page.isHidden('#gate')) && (await A.page.inputValue('#inspector')) === 'ธนา ทดลองกิจ' && (await A.page.getAttribute('#inspector', 'readonly')) !== null && !(await A.page.isVisible('#inspector')) && !(await A.page.isVisible('label[for="inspector"]')) && /Editor/.test(await A.page.innerText('#role')) && !(await A.page.isVisible('#pinDlg')));
 await A.page.click('#zones [data-id="FWD-STOWAGE-1"]');
 await A.page.click('#optS button:nth-child(2)'); await A.page.fill('#note', 'ล้อล็อกไม่ได้'); await A.page.click('#dSave');
 await A.page.click('#bSave');
