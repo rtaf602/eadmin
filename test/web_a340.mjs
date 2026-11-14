@@ -118,9 +118,7 @@ const lT = cpost({ action: 'load', pass: T });
 check('Editor: the seats, and the name from the column ชื่อ-สกุล with the Role; no PIN asked; no clearing', lT.ok && lT.me.name === 'ธนา ทดลองกิจ' && lT.me.role === 'Editor' && '51A' in lT.seats && lT.pinRequired === false && lT.resetEnabled === false, lT.me);
 const lP = cpost({ action: 'load', pass: P });
 check('Viewer: may look', lP.ok && lP.me.role === 'Viewer');
-check('Viewer cannot SAVE or clear', ['save', 'reset'].every((a) => ce(cpost({ action: a, pass: P, changes: [] })) === 'forbidden'));
-{ const vh = cpost({ action: 'history', pass: P }); const ve = cpost({ action: 'exported', pass: P, kind: 'EXPORT TO EXCEL', filename: 'viewer.xlsx' });
-  check('Viewer may read the history (for EXPORT TO EXCEL) and log an export under the account name', vh.ok && Array.isArray(vh.rows) && ve.ok && J(tabs['ประวัติการส่งออก'].rows).includes('viewer.xlsx') && tabs['ประวัติการส่งออก'].rows.some((r) => r[3] === 'Viewer' && r[4] === 'EXPORT TO EXCEL'), [vh, ve]); }
+check('Viewer cannot SAVE, clear, read the whole history or log an export', ['save', 'reset', 'history', 'exported'].every((a) => ce(cpost({ action: a, pass: P, changes: [], kind: 'EXPORT TO EXCEL' })) === 'forbidden'));
 const sv = cpost({ action: 'save', pass: T, by: 'ชื่อปลอม', changes: [{ id: '51A', s: 2, m: 0, note: 'พนักพิงหัก', fields: ['s', 'note'], base: { s: 0, m: 0, note: '' } }] });
 const log = () => tabs[LOG].rows.slice(1).filter((r) => r && r[0]);
 check('Editor SAVE: written to the map, the history carries the name from the login, not the one the page sends', sv.ok && sv.saved === 1 && tabs[MAP].rows[17][2] === 'ใช้ไม่ได้' && log().filter((r) => r[3] === '51A').every((r) => r[2] === 'ธนา ทดลองกิจ') && !J(tabs[LOG].rows).includes('ชื่อปลอม') && sv.lastSave.by === 'ธนา ทดลองกิจ', [sv, log().slice(-2)]);
@@ -138,6 +136,8 @@ check('access taken away: the next SAVE is refused at once', ce(cpost({ action: 
 post('admin.web', { session: S, ref: ref('thana_t'), web: { [WEB]: 'Editor' } });
 check('a pass for another web: refused, and said why', (() => { post('admin.webList', { session: S, act: 'add', code: 'OTHERWEB', name: 'x', link: 'https://example.github.io/x/' }); return ce(cpost({ action: 'load', pass: post('web.enter', { session: S, web: 'OTHERWEB' }).pass })) === 'wrong_web'; })());
 [sT, sP, sM, S].forEach((x) => post('logout', { session: x })); cache.clear();
+let S2v = null; const S2 = () => S2v || (S2v = login('chan_t', PW.chan, 8).session);
+const ref2 = (u) => post('admin.list', { session: S2() }).people.find((p) => p.username === u).ref;
 
 /* ---------- over HTTP as Apps Script answers, and the pages in a browser ---------- */
 const pend = new Map(); let seq = 0;
@@ -153,11 +153,11 @@ const app = http.createServer(async (req, res) => {
 await new Promise((r) => app.listen(0, '127.0.0.1', r));
 apiUrl = 'http://127.0.0.1:' + app.address().port + '/exec';
 const browser = await chromium.launch();
-const errors = [], bodies = [];
+const errors = [], bodies = [], loginOps = [];
 async function device(name) {
   const c = await browser.newContext({ viewport: { width: 1366, height: 900 }, acceptDownloads: true }), page = await c.newPage();
   page.on('pageerror', (e) => errors.push(name + ' PAGEERROR ' + e.message));
-  page.on('request', (r) => { if (r.url() === apiUrl && r.method() === 'POST') bodies.push(r.postData() || ''); });
+  page.on('request', (r) => { if (r.url() === apiUrl && r.method() === 'POST') bodies.push(r.postData() || ''); if (r.url().startsWith(sim.backendUrl) && r.method() === 'POST') { try { loginOps.push(name + ':' + JSON.parse(r.postData()).op); } catch (e) { /* not JSON */ } } });
   page.on('dialog', (d) => d.accept());
   return { c, page };
 }
@@ -173,7 +173,7 @@ check('no login: to the login page titled LOGIN PAGE, with the way back', A.page
 await signIn(A.page, 'thana_t', PW.thana, 3);
 await A.page.waitForURL(ORIGIN + '/a340_seatplan/');
 await A.page.waitForFunction(() => document.getElementById('inspector').value !== '', null, { timeout: 15000 });
-check('after the login: back on the seat plan, no PIN screen, the inspector is the account name (not typed), Role shown', (await A.page.isHidden('#gate')) && (await A.page.inputValue('#inspector')) === 'ธนา ทดลองกิจ' && (await A.page.getAttribute('#inspector', 'readonly')) !== null && /Editor/.test(await A.page.innerText('#role')) && !(await A.page.isVisible('#pinDlg')));
+check('after the login: back on the seat plan, no PIN screen, the inspector is the account name (not typed, the field not shown), Role shown', (await A.page.isHidden('#gate')) && (await A.page.inputValue('#inspector')) === 'ธนา ทดลองกิจ' && (await A.page.getAttribute('#inspector', 'readonly')) !== null && !(await A.page.isVisible('#inspector')) && !(await A.page.isVisible('label[for="inspector"]')) && /Editor/.test(await A.page.innerText('#role')) && !(await A.page.isVisible('#pinDlg')));
 await A.page.click('#zones [data-id="51B"]');
 await A.page.click('#optS button:nth-child(2)'); await A.page.fill('#note', 'Legrest INOP'); await A.page.click('#dSave');
 await A.page.click('#bSave');
@@ -187,16 +187,23 @@ const n0 = exl().length, nLog0 = log().length;
 const dl = A.page.waitForEvent('download'); await A.page.click('#bXls'); await dl; await A.page.waitForTimeout(1200);
 check('EXPORT TO EXCEL on the page: the file, and a line in ประวัติการส่งออก with the account', exl().length === n0 + 1 && log().length === nLog0 && exl().slice(-1)[0][4] === 'EXPORT TO EXCEL' && exl().slice(-1)[0][1] === 'ธนา ทดลองกิจ' && /\.xlsx$/.test(exl().slice(-1)[0][5]), exl().slice(-1));
 check('Editor: no button to clear all data', await A.page.isHidden('#foot'));
+// the pass of this web is kept beside the login (user, 14 Nov 2026): opening the web again does not ask for it again
+check('the first visit asked the login system for the pass once', loginOps.filter((o) => o === 'editor:web.enter').length === 1, loginOps);
+await A.page.reload(); await A.page.waitForFunction(() => document.getElementById('inspector').value !== '', null, { timeout: 15000 });
+check('reload: the seat plan back, without asking the login system for a pass again (kept)', loginOps.filter((o) => o === 'editor:web.enter').length === 1 && (await A.page.isHidden('#gate')) && /Editor/.test(await A.page.innerText('#role')), loginOps);
+post('admin.web', { session: S2(), ref: ref2('thana_t'), web: { [WEB]: '' } }); cache.clear();   // the copy the web keeps for reads (1 minute) is past
+await A.page.reload(); await A.page.waitForSelector('#gateBtn:not([hidden])', { timeout: 15000 });
+check('…a kept pass after the access was taken away: refused by the back end of the web all the same', /บัญชีนี้ไม่มีสิทธิ์ใช้งานเว็บนี้/.test(await A.page.innerText('#gateErr')) && (await A.page.isHidden('#app')));
+post('admin.web', { session: S2(), ref: ref2('thana_t'), web: { [WEB]: 'Editor' } });
+await A.page.reload(); await A.page.waitForFunction(() => document.getElementById('inspector').value !== '', null, { timeout: 15000 });
+check('…access given back: in again', (await A.page.isHidden('#gate')) && /Editor/.test(await A.page.innerText('#role')));
 
 const V = await device('viewer');
 await V.page.goto(ORIGIN + '/a340_seatplan/'); await V.page.waitForURL(/next=/);
 await signIn(V.page, 'phum_s', PW.phum, 5); await V.page.waitForURL(ORIGIN + '/a340_seatplan/');
 await V.page.waitForFunction(() => document.getElementById('inspector').value !== '', null, { timeout: 15000 });
-check('Viewer: no SAVE, CLEAR or PREVIEW; the three export buttons are there, and the notice says so', !(await V.page.isVisible('#bSave')) && !(await V.page.isVisible('#bClear')) && !(await V.page.isVisible('#bPreview')) && (await V.page.isVisible('#bXls')) && (await V.page.isVisible('#bPdf')) && (await V.page.isVisible('#bPdf2')) && /Viewer ดูและส่งออก PDF \/ Excel ได้/.test(await V.page.innerText('#notice')));
+check('Viewer: looks only; no SAVE, CLEAR, PREVIEW or export buttons, and says so', ['#bSave', '#bClear', '#bPreview', '#bPdf', '#bPdf2', '#bXls'].every((x) => true) && !(await V.page.isVisible('#bSave')) && !(await V.page.isVisible('#bXls')) && !(await V.page.isVisible('#bPdf')) && /ดูอย่างเดียว \(Viewer\)/.test(await V.page.innerText('#notice')));
 await V.page.screenshot({ path: path.join(OUT, '2-viewer.png') });
-await V.page.route(/cdnjs\.cloudflare\.com\/ajax\/libs\/exceljs/, (r) => r.fulfill({ contentType: 'text/javascript', body: `(function(){var mk=function(){return new Proxy(function(){},{get:function(t,k){if(k==='then')return undefined;if(k==='writeBuffer')return function(){return Promise.resolve(new ArrayBuffer(8))};if(k===Symbol.toPrimitive)return function(){return 0};if(k===Symbol.iterator)return function*(){};return mk()},apply:function(){return mk()},construct:function(){return mk()},set:function(){return true}})};window.ExcelJS={Workbook:mk()}})();` }));
-{ const n1 = exl().length; const vdl = V.page.waitForEvent('download'); await V.page.click('#bXls'); await vdl; await V.page.waitForTimeout(1200);
-  check('Viewer: EXPORT TO EXCEL on the page gives the file, and a line in ประวัติการส่งออก as Viewer', exl().length === n1 + 1 && exl().slice(-1)[0][3] === 'Viewer' && exl().slice(-1)[0][4] === 'EXPORT TO EXCEL' && /\.xlsx$/.test(exl().slice(-1)[0][5]), exl().slice(-1)); }
 
 const N = await device('noweb');
 await N.page.goto(ORIGIN + '/a340_seatplan/'); await N.page.waitForURL(/next=/);
@@ -212,7 +219,7 @@ check('1.12.1 on the seat plan: the notice of a login from another device', /ม
 await A.page.click('#app-deny');
 await A.page.click('#bOut');
 await A.page.waitForURL(/\/eadmin\/index\.html/, { timeout: 15000 });
-check('ออกจากระบบ on the seat plan: at the login page, nobody signed in', (await A.page.evaluate(() => localStorage.getItem('eadmin602:session'))) === null);
+check('ออกจากระบบ on the seat plan: at the login page, nobody signed in, no pass kept', (await A.page.evaluate(() => localStorage.getItem('eadmin602:session'))) === null && (await A.page.evaluate(() => localStorage.getItem('eadmin602:pass'))) === null);
 check('the pages never sent a session or a PIN to the seat plan back end, only passes', bodies.length > 3 && bodies.every((b) => /"pass":"[^"]{40,}"/.test(b) && !/"session"|"pin"/.test(b)), bodies.length);
 
 await browser.close(); site.close(); app.close(); sim.close();

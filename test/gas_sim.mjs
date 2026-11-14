@@ -152,7 +152,14 @@ export async function startSim(opts = {}) {
     ContentService: { MimeType: { JSON: 'application/json' }, createTextOutput: (s) => ({ text: s, setMimeType() { return this; }, getContent() { return this.text; } }) },
     Utilities,
     Logger: { log: (s) => logs.push(String(s)) },
+    // the project's clocks (time-driven triggers): sim.triggers holds { fn, minutes }
+    ScriptApp: {
+      getProjectTriggers: () => sim.triggers.map((t) => ({ getHandlerFunction: () => t.fn, _t: t })),
+      deleteTrigger: (h) => { sim.triggers = sim.triggers.filter((t) => t !== h._t); },
+      newTrigger: (fn) => { const t = { fn, minutes: 0 }; const b = { timeBased: () => b, everyMinutes: (m) => { t.minutes = m; return b; }, create: () => { sim.triggers.push(t); return b; } }; return b; },
+    },
   };
+  sim.triggers = [];
   const ctx = vm.createContext(sandbox);
   // the clock of the sandbox follows sim.offset: Date.now() and new Date() are "now" as the stand-in sees it
   sandbox.__clock = clock;

@@ -207,6 +207,22 @@ function createFirstAdminLinks() {
   } finally { lock.releaseLock(); }
 }
 
+/* Keep the script awake (user, 14 Nov 2026): a clock runs keepWarm every 5 minutes, so that the first request after a
+   quiet while does not wait for Apps Script to start. It reads no sheet and decides nothing (about 288 short runs a day
+   of the 90 minutes of triggers an ordinary Google account has). Run startKeepWarm once from the Apps Script page to
+   turn it on, stopKeepWarm to turn it off; both touch only the clock of keepWarm. */
+function keepWarm() { props_(); }
+function startKeepWarm() {
+  stopKeepWarm();
+  ScriptApp.newTrigger('keepWarm').timeBased().everyMinutes(5).create();
+  Logger.log('ตั้งนาฬิกาปลุกระบบแล้ว: keepWarm ทำงานทุก 5 นาที (ปิดได้ด้วย stopKeepWarm)');
+}
+function stopKeepWarm() {
+  let n = 0;
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'keepWarm') { ScriptApp.deleteTrigger(t); n++; } });
+  if (n) Logger.log('ลบนาฬิกาปลุกระบบเดิม ' + n + ' ตัว');
+}
+
 /* ------------------------------ web app entry points ------------------------------ */
 
 function doGet() { return json_({ ok: true, service: 'eadmin602', ready: ready_(props_()) }); }
