@@ -36,6 +36,7 @@ const SETUP = {
 // ====================================================================================
 
 const OPT = {
+  memoSeconds: 60,            // web.enter / web.check ใช้สำเนาข้อมูลของแต่ละคนได้นานกี่วินาที (การเปลี่ยนผ่านระบบนี้ลบสำเนาทันที แก้ชีทด้วยมือรอไม่เกินเท่านี้)
   sessionMinutes: 60,         // เข้าสู่ระบบหนึ่งครั้งใช้งานได้กี่นาที นับจากเวลาที่ Login ไม่ต่ออายุตามการใช้งาน
   warnMinutes: 5,             // หน้าเว็บเตือนก่อนหมดเวลากี่นาที
   pollSeconds: 10,            // หน้าเว็บที่ Login อยู่ถามระบบหลังบ้านทุกกี่วินาที ว่ามีการ Login ซ้อนจากเครื่องอื่นหรือไม่
@@ -145,7 +146,7 @@ function setup() {
   props.setProperty(PROP.site, siteUrl_(SETUP.siteUrl));
   props.setProperty(PROP.first, JSON.stringify((SETUP.firstAdmins || []).map(function (u) { return str_(u).toLowerCase(); }).filter(String)));
   if (!props.getProperty(PROP.secret)) props.setProperty(PROP.secret, hex_(randomBytes_()) + hex_(randomBytes_()));
-  CacheService.getScriptCache().remove('cfg');
+  CacheService.getScriptCache().remove('cfg'); CacheService.getScriptCache().remove('wl');
 
   // the first backup, with Protect on every tab of both backup files. A failure here stops the setup: better now than later.
   const ctx = { props: props_(), now: Date.now(), locked: true };
@@ -407,16 +408,16 @@ function db_(ctx) {
 function missing_(p) { return BASE.filter(function (b) { return !p[b[0]]; }).map(function (b) { return b[1]; }); }
 function sameId_(db, t) { return db.people.filter(function (p) { return p !== t && !!t.idGov && p.idGov === t.idGov; }); }
 function canLogin_(p) { return !missing_(p).length && !!p.role && !!p.username && !!p.salt && !!p.hash; }
-function isSuper_(ctx, p) { return !!p.idGov && p.idGov === ctx.props.getProperty(PROP.superId); }
+function isSuper_(ctx, p) { return p.sup !== undefined ? p.sup : !!p.idGov && p.idGov === ctx.props.getProperty(PROP.superId); }      // sup: a copy kept by memo_ (no ID number in it)
 function isAdmin_(p) { return p.role === 'Admin' && canLogin_(p); }
 function over_(ctx, p) { return !isSuper_(ctx, p) && (p.endBad || (!!p.end && today_() > p.end)); }
 function full_(p) { return (p.rank ? p.rank + ' ' : '') + p.name; }
 function superName_(ctx) { const s = db_(ctx).people.filter(function (p) { return isSuper_(ctx, p); })[0]; return s && s.username ? s.username : 'Admin หลัก'; }
 function sameUser_(db, t, username) { const u = username.toLowerCase(); return db.people.filter(function (p) { return p !== t && p.username.toLowerCase() === u; }); }
-function setCell_(ctx, p, key, value) { ctx.db.sh.getRange(p.row, ctx.db.col[key] + 1).setValue(value); ctx.dbDirty = true; }      // dbDirty: the tab is copied to its backup when the request ends
+function setCell_(ctx, p, key, value) { ctx.db.sh.getRange(p.row, ctx.db.col[key] + 1).setValue(value); ctx.dbDirty = true; forget_(ctx, p); }      // dbDirty: the tab is copied to its backup when the request ends
 function setEnd_(ctx, p, iso) {
   const cell = ctx.db.sh.getRange(p.row, ctx.db.col.end + 1);
-  ctx.dbDirty = true;
+  ctx.dbDirty = true; forget_(ctx, p);
   if (!iso) { cell.clearContent(); return; }
   // noon of that day in the spreadsheet's own time zone, so the sheet shows the same date wherever the script runs
   cell.setValue(Utilities.parseDate(iso + ' 12:00', ctx.db.tz, 'yyyy-MM-dd HH:mm')).setNumberFormat(D_FMT);
@@ -479,12 +480,49 @@ function webRole_(ctx, p, code) { return isSuper_(ctx, p) ? 'Admin' : (p.web[cod
 // s: the session itself, already opened (see opWebCheck_); otherwise it is read from req
 // quiet: asked by the back end of that web, not by the page itself (see opWebCheck_)
 function webAuth_(ctx, req, code, quiet, s) {
-  const p = s ? who_(ctx, s, quiet) : auth_(ctx, req, quiet), w = webOf_(ctx, code);
+  s = s || token_(ctx, req);
+  const p = memoWho_(ctx, s, quiet) || who_(ctx, s, quiet), w = memoWebOf_(ctx, code);
   const role = w ? webRole_(ctx, p, w.code) : '';
   if (!role) throw err_('no_web', MSG.noWeb);                         // unknown, or no access: one answer, so codes cannot be guessed
   if (!w.open) throw err_('web_closed', MSG.webShut);
   return { p: p, web: w, role: role };
 }
+/* Kept for a minute (user, 14 Nov 2026), so that entering a web (web.enter) and every request of a web (web.check)
+   need not open the LOGIN DATABASE file: of each person, only what these two answers need, found when the row was last
+   read (a login, or any request that read the sheet), and the list of webs. No ID number, no date of birth, no salt or
+   hash: a mark of the password (pwMark_) and whether it is the main administrator. Every change made through this
+   system drops the copy at once (setCell_, setEnd_, the list of webs), so a Role, an end date, web access, a closed web
+   or a new password take effect at once as before; only a change typed into the sheet by hand waits up to OPT.memoSeconds.
+   The device check (one account, one device) is never kept: device_ runs on every request. Only web.enter and
+   web.check use the copy; the login, the Admin page and every other request read the sheet as before. */
+function memoKey_(ctx, p) { return 'pm:' + devKey_(ctx, p.idGov); }
+function memo_(ctx, p) {
+  if (!p || !p.idGov) return;
+  const keep = { rank: p.rank, name: p.name, pos: p.pos, username: p.username, role: p.role, web: p.web, end: p.end, endBad: p.endBad,
+    ok: canLogin_(p), pm: pwMark_(ctx, p), sup: isSuper_(ctx, p) };
+  try { CacheService.getScriptCache().put(memoKey_(ctx, p), JSON.stringify(keep), OPT.memoSeconds); } catch (x) { /* not kept: read the sheet next time */ }
+}
+function forget_(ctx, p) { if (p && p.idGov) CacheService.getScriptCache().remove(memoKey_(ctx, p)); }
+// the person of this session from the kept copy, checked as who_ checks the row; null: read the sheet (who_ decides)
+function memoWho_(ctx, s, quiet) {
+  let c = null;
+  try { c = JSON.parse(CacheService.getScriptCache().get('pm:' + String(s.i)) || 'null'); } catch (x) { c = null; }
+  if (!c || !c.ok || !same_(c.pm, s.p) || (!c.sup && (c.endBad || (!!c.end && today_() > c.end)))) return null;
+  device_(ctx, s, quiet);                                                           // ข้อ 1.12: never from a copy
+  ctx.exp = +s.e;
+  return c;
+}
+function memoWebOf_(ctx, code) {
+  const cache = CacheService.getScriptCache(), c = str_(code).toUpperCase();
+  let list = null;
+  try { list = JSON.parse(cache.get('wl') || 'null'); } catch (x) { list = null; }
+  if (!list) {
+    list = webs_(ctx).list.map(function (w) { return { code: w.code, name: w.name, link: w.link, open: w.open }; });
+    try { cache.put('wl', JSON.stringify(list), OPT.memoSeconds); } catch (x) { /* not kept */ }
+  }
+  return list.filter(function (w) { return w.code === c; })[0] || null;
+}
+
 // setup(): the column of web access, added at the end of the header row (and of every repeated header row) when it
 // is not there. Returns the column letter it was put in, or '' when it was there already.
 function webCol_(sh) {
@@ -539,6 +577,7 @@ function who_(ctx, s, quiet) {
   if (over_(ctx, p)) throw err_('expired', MSG.expired);
   device_(ctx, s, quiet);                                                           // ข้อ 1.12
   ctx.exp = +s.e;
+  memo_(ctx, p);
   return p;
 }
 
@@ -725,6 +764,7 @@ function opLogin_(ctx, req) {
   if (r.wait) return { wait: true, ticket: seal_(ctx, 'ticket', { i: k, r: sid, p: mark, e: ctx.now + DEV.ticket * 1000 }), pollMs: DEV.waitPollMs, username: p.username };
   cache.put('ds:' + k, String(ctx.now), 3600);
   sweep_(ctx);
+  memo_(ctx, p);
   return { session: session_(ctx, p, sid, r.st.e), expiresAt: r.st.e, user: user_(ctx, p) };
 }
 // Now and then (every six hours at most) what is kept about logins that ended long ago is thrown away.
@@ -765,6 +805,7 @@ function opLoginWait_(ctx, req) {
     throw p ? err_('expired', MSG.expired) : err_('login_failed', MSG.login);
   }
   cache.put('ds:' + k, String(ctx.now), 3600);
+  memo_(ctx, p);
   return { session: session_(ctx, p, t.r, r.st.e), expiresAt: r.st.e, user: user_(ctx, p) };
 }
 
@@ -961,7 +1002,7 @@ function opAdminWebList_(ctx, req) {
   }
   ctx.dbDirty = true;                                                   // ข้อ 1.14.7.8: the WEB LIST tab goes into today's backup
   backlog_(ctx, { action: 'WEB_LIST', event: event, admin: a.username, note: note });
-  ctx.webs = null;
+  ctx.webs = null; CacheService.getScriptCache().remove('wl');
   return { webs: webs_(ctx).list.map(function (x) { return { code: x.code, name: x.name, link: x.link, open: x.open }; }) };
 }
 

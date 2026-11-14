@@ -462,6 +462,8 @@ check('…only the code and the Role: no name, no link', mT2.webs.every((w) => J
 check('…the main admin: every open web as Admin; an account with no web: an empty list; no session: refused', mineOf(mine(S)) === 'AIRCRAFT:Admin,REPORT:Admin' && mineOf(mine(sSom.session)) === '' && mine(sSom.session).ok && code(mine('')) === 'auth');
 check('1.14.3.4 access taken away: the open login is refused at its next request', wa(S, 'thana_t', { AIRCRAFT: '' }).ok && cell('thana_t', 16) === 'REPORT=Viewer' && code(enter(tT, 'AIRCRAFT')) === 'no_web' && enter(tT, 'REPORT').ok);
 rowOf(sim, 'thana_t').cells[16] = 'aircraft=editor, junk; REPORT = viewer ; X=Boss';
+check('a cell typed into the sheet by hand waits for the copy kept for web.enter / web.check (at most OPT.memoSeconds)', J(rolesOf(tT)) === J(['REPORT:Viewer']), rolesOf(tT));
+sim.advance(61000);
 check('a cell written by hand: what can be read is read, the rest is left out', J(rolesOf(tT)) === J(['AIRCRAFT:Editor', 'REPORT:Viewer']));
 rowOf(sim, 'thana_t').cells[16] = 'REPORT=Viewer';
 rowOf(sim, 'thana_t').cells[10] = 'Editor';
@@ -484,6 +486,7 @@ const wlRows = sim.sheet(DB, 'WEB LIST'), stateAt = wlRows.findIndex((r) => r[0]
 wlRows[stateAt][3] = '';
 check('a web whose state cell was emptied by hand counts as closed', code(enter(S, 'REPORT')) === 'web_closed');
 wlRows[stateAt][3] = 'เปิด';
+check('…written back by hand: the copy of the list of webs is kept up to a minute, then it is open again', code(enter(S, 'REPORT')) === 'web_closed' && (sim.advance(61000), enter(S, 'REPORT').ok));
 check('the web calls that write are refused without a session before anything is read', ['admin.web', 'admin.webList'].every((op) => code(post(op, {})) === 'auth'));
 
 /* ---------- web.check: the back end of another web asks for a request it received (ข้อ 1.14.3.5) ---------- */
@@ -498,6 +501,12 @@ check('web.check refuses a made-up or empty pass', code(wc('', 'REPORT')) === 'a
 const passSom = (() => { wa(S, 'somchai_t', { REPORT: 'Viewer' }); const p = enter(sSom2, 'REPORT').pass; wa(S, 'somchai_t', { REPORT: '' }); return p; })();
 check('access taken away after the pass was handed out: refused (the row is read again)', !!passSom && code(wc(passSom, 'REPORT')) === 'no_web');
 check('a closed web: refused', (() => { wl(S, { act: 'close', code: 'REPORT' }); const r = code(wc(passS, 'REPORT')); wl(S, { act: 'open', code: 'REPORT' }); return r === 'web_closed'; })());
+enter(S, 'REPORT');
+{ const o0 = sim.opens, e2 = enter(S, 'REPORT'), c2 = wc(e2.pass, 'REPORT'), c3 = wc(e2.pass, 'REPORT');
+  check('the copy kept for a minute (14 Nov): entering a web again and its checks open no sheet', e2.ok && c2.ok && c3.ok && sim.opens === o0, sim.opens - o0); }
+{ const p0 = enter(S, 'REPORT').pass; wa(S, 'somchai_t', { REPORT: 'Editor' });
+  const e3 = enter(sSom2, 'REPORT'), c4 = wc(e3.pass, 'REPORT'); wa(S, 'somchai_t', { REPORT: '' });
+  check('…a change made in the Admin page drops the copy of that person at once: given, then taken away', e3.ok && c4.ok && c4.role === 'Editor' && code(wc(e3.pass, 'REPORT')) === 'no_web' && code(enter(sSom2, 'REPORT')) === 'no_web' && wc(p0, 'REPORT').ok); }
 // a second device waits for the account; the back end of the web asks with the pass of the first one
 wa(S, 'somchai_t', { REPORT: 'Viewer' });
 const passSom2 = enter(sSom2, 'REPORT').pass;
