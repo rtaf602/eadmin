@@ -3,7 +3,7 @@
 window.App = (() => {
   'use strict';
   const BACKEND = String((window.EADMIN_CONFIG || {}).backendUrl || '').trim();
-  const KEY = 'eadmin602:session', FLASH = 'eadmin602:flash', BEAT = 'eadmin602:beat', TAKE = 'eadmin602:take', SKEW = 'eadmin602:skew', REFUSE = 'eadmin602:refusing', TIMEOUT = 60000;
+  const KEY = 'eadmin602:session', FLASH = 'eadmin602:flash', BEAT = 'eadmin602:beat', TAKE = 'eadmin602:take', SKEW = 'eadmin602:skew', REFUSE = 'eadmin602:refusing', PASSES = 'eadmin602:pass', TIMEOUT = 60000;
   const MON = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
   const MON_S = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
   const TEXT = {
@@ -39,7 +39,7 @@ window.App = (() => {
   function setSkew(serverNow) { const v = serverNow - Date.now(); if (Math.abs(v - skew) > 500) box.set(SKEW, String(v)); skew = v; }
   const stored = () => { const s = json(KEY); return s && s.token && s.user ? s : null; };
   function session() { const s = stored(); return s && s.exp > now() ? s : null; }
-  function signIn(r) { box.set(KEY, JSON.stringify({ token: r.session, exp: r.expiresAt, user: r.user })); box.del(TAKE); box.del(FLASH); box.set(BEAT, String(Date.now())); }
+  function signIn(r) { box.set(KEY, JSON.stringify({ token: r.session, exp: r.expiresAt, user: r.user })); box.del(TAKE); box.del(PASSES); box.del(FLASH); box.set(BEAT, String(Date.now())); }
   function setUser(user, exp) { const s = stored(); if (!s) return; s.user = user; if (exp) s.exp = exp; box.set(KEY, JSON.stringify(s)); }
   // the message is kept a short while, so that every tab that falls back to the login page can show the reason
   function flash() { const f = json(FLASH); return f && Date.now() - f.t < 20000 ? String(f.m || '') : ''; }
@@ -54,7 +54,7 @@ window.App = (() => {
   function leave(message, tell) {
     const s = stored();
     if (s && tell) farewell(s.token);
-    box.del(KEY); box.del(TAKE);
+    box.del(KEY); box.del(TAKE); box.del(PASSES);
     if (message) box.set(FLASH, JSON.stringify({ m: message, t: Date.now() })); else box.del(FLASH);
     location.replace(loginUrl());
   }
@@ -203,7 +203,28 @@ window.App = (() => {
      account and its Role in that web, or refuses: { code: 'no_web' } no access, { code: 'web_closed' } the web is closed.
      Showing or hiding buttons by that Role is only a convenience: every request of the web that reads or writes data
      has to be checked again by the back end with webAuth_(). */
-  const enterWeb = (code) => api('web.enter', { web: code });
+  /* The pass of a web is kept beside the login of this browser (same place, user 14 Nov 2026), so that opening the same
+     web again within the hour of the login does not ask the back end for it again (one round trip less). It is bound to
+     this login (a mark of its session) and to the web, and ends with the login: another login, signing out, or the hour
+     over and it is not used. Nothing is decided by keeping it: the back end of the web asks web.check on every request,
+     so access taken away, the web closed, the password changed or another device are refused as before. */
+  const passTag = (s) => String(s.token).slice(-24);
+  function keptPass(code) {
+    const s = session(), k = s && json(PASSES), hit = k && k.s === passTag(s) && k.w && k.w[code];
+    return hit && hit.pass && s.exp - now() > 60000 ? { pass: hit.pass, role: hit.role, web: hit.web, kept: true } : null;
+  }
+  async function enterWeb(code) {
+    const hit = keptPass(code); if (hit) return hit;
+    const s = session(), r = await api('web.enter', { web: code });
+    if (s && r && r.pass && session() && session().token === s.token) {
+      const k0 = json(PASSES), k = k0 && k0.s === passTag(s) && k0.w ? k0 : { s: passTag(s), w: {} };
+      k.w[code] = { pass: r.pass, role: r.role, web: r.web };
+      box.set(PASSES, JSON.stringify(k));
+    }
+    return r;
+  }
+  // a web whose back end refused the kept pass: the next enterWeb asks the back end again
+  function forgetPass(code) { const k = json(PASSES); if (k && k.w && k.w[code]) { delete k.w[code]; box.set(PASSES, JSON.stringify(k)); } }
   // a page of another web without a login in this browser: to the login page, and back here after it
   const toLogin = () => location.replace(loginUrl());
   // the way back after a login, from ?next= : a path of this same site, nothing else
@@ -212,5 +233,5 @@ window.App = (() => {
     return /^\/(?!\/)[A-Za-z0-9._~%\-\/]{0,200}$/.test(v) && v.indexOf('..') < 0 ? location.origin + v : '';
   }
 
-  return { $, esc, api, session, signIn, setUser, signOut, farewell, giveUp, flash, watch, now, fmtD, fmtT, fmtDT, mmss, beYear, years, buildDP, dp, setDP, disableDP, enterWeb, toLogin, next, loginUrl, hasBackend: !!BACKEND };
+  return { $, esc, api, session, signIn, setUser, signOut, farewell, giveUp, flash, watch, now, fmtD, fmtT, fmtDT, mmss, beYear, years, buildDP, dp, setDP, disableDP, enterWeb, forgetPass, toLogin, next, loginUrl, hasBackend: !!BACKEND };
 })();

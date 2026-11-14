@@ -136,6 +136,8 @@ check('access taken away: the next SAVE is refused at once', ce(cpost({ action: 
 post('admin.web', { session: S, ref: ref('thana_t'), web: { [WEB]: 'Editor' } });
 check('a pass for another web: refused, and said why', (() => { post('admin.webList', { session: S, act: 'add', code: 'OTHERWEB', name: 'x', link: 'https://example.github.io/x/' }); return ce(cpost({ action: 'load', pass: post('web.enter', { session: S, web: 'OTHERWEB' }).pass })) === 'wrong_web'; })());
 [sT, sP, sM, S].forEach((x) => post('logout', { session: x })); cache.clear();
+let S2v = null; const S2 = () => S2v || (S2v = login('chan_t', PW.chan, 8).session);
+const ref2 = (u) => post('admin.list', { session: S2() }).people.find((p) => p.username === u).ref;
 
 /* ---------- over HTTP as Apps Script answers, and the pages in a browser ---------- */
 const pend = new Map(); let seq = 0;
@@ -151,11 +153,11 @@ const app = http.createServer(async (req, res) => {
 await new Promise((r) => app.listen(0, '127.0.0.1', r));
 apiUrl = 'http://127.0.0.1:' + app.address().port + '/exec';
 const browser = await chromium.launch();
-const errors = [], bodies = [];
+const errors = [], bodies = [], loginOps = [];
 async function device(name) {
   const c = await browser.newContext({ viewport: { width: 1366, height: 900 }, acceptDownloads: true }), page = await c.newPage();
   page.on('pageerror', (e) => errors.push(name + ' PAGEERROR ' + e.message));
-  page.on('request', (r) => { if (r.url() === apiUrl && r.method() === 'POST') bodies.push(r.postData() || ''); });
+  page.on('request', (r) => { if (r.url() === apiUrl && r.method() === 'POST') bodies.push(r.postData() || ''); if (r.url().startsWith(sim.backendUrl) && r.method() === 'POST') { try { loginOps.push(name + ':' + JSON.parse(r.postData()).op); } catch (e) { /* not JSON */ } } });
   page.on('dialog', (d) => d.accept());
   return { c, page };
 }
@@ -185,6 +187,16 @@ const n0 = exl().length, nLog0 = log().length;
 const dl = A.page.waitForEvent('download'); await A.page.click('#bXls'); await dl; await A.page.waitForTimeout(1200);
 check('EXPORT TO EXCEL on the page: the file, and a line in ประวัติการส่งออก with the account', exl().length === n0 + 1 && log().length === nLog0 && exl().slice(-1)[0][4] === 'EXPORT TO EXCEL' && exl().slice(-1)[0][1] === 'ธนา ทดลองกิจ' && /\.xlsx$/.test(exl().slice(-1)[0][5]), exl().slice(-1));
 check('Editor: no button to clear all data', await A.page.isHidden('#foot'));
+// the pass of this web is kept beside the login (user, 14 Nov 2026): opening the web again does not ask for it again
+check('the first visit asked the login system for the pass once', loginOps.filter((o) => o === 'editor:web.enter').length === 1, loginOps);
+await A.page.reload(); await A.page.waitForFunction(() => document.getElementById('inspector').value !== '', null, { timeout: 15000 });
+check('reload: the seat plan back, without asking the login system for a pass again (kept)', loginOps.filter((o) => o === 'editor:web.enter').length === 1 && (await A.page.isHidden('#gate')) && /Editor/.test(await A.page.innerText('#role')), loginOps);
+post('admin.web', { session: S2(), ref: ref2('thana_t'), web: { [WEB]: '' } }); cache.clear();   // the copy the web keeps for reads (1 minute) is past
+await A.page.reload(); await A.page.waitForSelector('#gateBtn:not([hidden])', { timeout: 15000 });
+check('…a kept pass after the access was taken away: refused by the back end of the web all the same', /บัญชีนี้ไม่มีสิทธิ์ใช้งานเว็บนี้/.test(await A.page.innerText('#gateErr')) && (await A.page.isHidden('#app')));
+post('admin.web', { session: S2(), ref: ref2('thana_t'), web: { [WEB]: 'Editor' } });
+await A.page.reload(); await A.page.waitForFunction(() => document.getElementById('inspector').value !== '', null, { timeout: 15000 });
+check('…access given back: in again', (await A.page.isHidden('#gate')) && /Editor/.test(await A.page.innerText('#role')));
 
 const V = await device('viewer');
 await V.page.goto(ORIGIN + '/a340_seatplan/'); await V.page.waitForURL(/next=/);
@@ -207,7 +219,7 @@ check('1.12.1 on the seat plan: the notice of a login from another device', /ม
 await A.page.click('#app-deny');
 await A.page.click('#bOut');
 await A.page.waitForURL(/\/eadmin\/index\.html/, { timeout: 15000 });
-check('ออกจากระบบ on the seat plan: at the login page, nobody signed in', (await A.page.evaluate(() => localStorage.getItem('eadmin602:session'))) === null);
+check('ออกจากระบบ on the seat plan: at the login page, nobody signed in, no pass kept', (await A.page.evaluate(() => localStorage.getItem('eadmin602:session'))) === null && (await A.page.evaluate(() => localStorage.getItem('eadmin602:pass'))) === null);
 check('the pages never sent a session or a PIN to the seat plan back end, only passes', bodies.length > 3 && bodies.every((b) => /"pass":"[^"]{40,}"/.test(b) && !/"session"|"pin"/.test(b)), bodies.length);
 
 await browser.close(); site.close(); app.close(); sim.close();

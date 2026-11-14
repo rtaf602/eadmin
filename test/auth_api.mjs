@@ -520,6 +520,14 @@ check('nothing the back end wrote was taken for a formula or a number', !everyth
 check('BACKLOG rows all have 14 cells, a time, an action and an event', log().every((r) => r.length === 14 && isD(r[0]) && ['CREATE', 'RESET', 'CHANGE_ROLE', 'CHANGE_USERNAME', 'BACKUP', 'WEB_ACCESS', 'WEB_LIST'].includes(r[1]) && typeof r[2] === 'string'), log().find((r) => r.length !== 14));
 check('the back end logged no unexpected error', !sim.logs.some((l) => l.startsWith('console.error')), sim.logs.filter((l) => l.startsWith('console.error')));
 rowOf(sim, 'phum_s').cells[13] = 'pbkdf2-sha256$5000$zz';
+/* keeping the script awake (user, 14 Nov 2026) */
+sim.triggers.push({ fn: 'someOtherClock', minutes: 1 });
+sim.run('startKeepWarm(); startKeepWarm();');
+check('startKeepWarm: one clock for keepWarm every 5 minutes, even when run twice; other clocks left alone', sim.triggers.filter((t) => t.fn === 'keepWarm').length === 1 && sim.triggers.find((t) => t.fn === 'keepWarm').minutes === 5 && sim.triggers.some((t) => t.fn === 'someOtherClock'), sim.triggers);
+{ const o0 = sim.opens; sim.run('keepWarm(); keepWarm();'); check('keepWarm opens no sheet and changes nothing', sim.opens === o0); }
+sim.run('stopKeepWarm();');
+check('stopKeepWarm removes only its own clock', !sim.triggers.some((t) => t.fn === 'keepWarm') && sim.triggers.some((t) => t.fn === 'someOtherClock'), sim.triggers);
+sim.triggers = [];
 check('a damaged hash cell: that account cannot log in, nothing breaks', code(login('phum_s', PW.phum2, 5)) === 'login_failed');
 
 /* ---------- over HTTP, the way a browser reaches it ---------- */
