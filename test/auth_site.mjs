@@ -286,9 +286,14 @@ const enterAs = (dev, code) => dev.page.evaluate((c) => App.enterWeb(c).then((r)
 check('1.14.3.5 a page of the web asks the back end: Editor here; a web without access is refused', (await enterAs(D1, 'AIRCRAFT')) === 'Editor' && (await enterAs(D1, 'REPORT')) === 'no_web');
 await D1.page.screenshot({ path: path.join(OUT, 'login-webs.png'), fullPage: true });
 await M.admin(); await M.page.click('[data-wl-toggle=AIRCRAFT]'); await M.page.waitForSelector('#wl-done:not([hidden])');
-check('1.14.7.4 the web is closed: nobody enters, the access is kept', (await enterAs(D1, 'AIRCRAFT')) === 'web_closed' && cell('thana_t', 16) === 'AIRCRAFT=Editor' && /ปิด/.test(await M.page.innerText('#wl-rows')));
+// the pass of AIRCRAFT is kept in this browser (14 Nov): the back end of the web refuses it now all the same (web.check)
+const keptPass = await D1.page.evaluate(() => (JSON.parse(localStorage.getItem('eadmin602:pass') || '{}').w || {}).AIRCRAFT);
+const wcClosed = keptPass && sim.post({ v: 1, op: 'web.check', pass: keptPass.pass, web: 'AIRCRAFT' });
+check('1.14.7.4 the web is closed: a pass kept in the browser is refused by web.check (web_closed)', !!keptPass && wcClosed.ok === false && wcClosed.error.code === 'web_closed', wcClosed);
+const enterFresh = (dev, code) => dev.page.evaluate((c) => { App.forgetPass(c); return App.enterWeb(c).then((r) => r.web.role, (e) => e.code); }, code);
+check('1.14.7.4 the web is closed: nobody enters, the access is kept', (await enterFresh(D1, 'AIRCRAFT')) === 'web_closed' && cell('thana_t', 16) === 'AIRCRAFT=Editor' && /ปิด/.test(await M.page.innerText('#wl-rows')));
 await M.page.click('[data-wl-toggle=AIRCRAFT]'); await M.page.waitForSelector('#wl-done:not([hidden])');
-check('…opened again, the old access works again', (await enterAs(D1, 'AIRCRAFT')) === 'Editor');
+check('…opened again, the old access works again', (await enterFresh(D1, 'AIRCRAFT')) === 'Editor');
 
 /* ---------- one hour (ข้อ 1.10) ---------- */
 sim.advance(56 * 60000);
