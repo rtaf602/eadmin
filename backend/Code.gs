@@ -516,11 +516,15 @@ function memoWebOf_(ctx, code) {
   const cache = CacheService.getScriptCache(), c = str_(code).toUpperCase();
   let list = null;
   try { list = JSON.parse(cache.get('wl') || 'null'); } catch (x) { list = null; }
-  if (!list) {
-    list = webs_(ctx).list.map(function (w) { return { code: w.code, name: w.name, link: w.link, open: w.open }; });
-    try { cache.put('wl', JSON.stringify(list), OPT.memoSeconds); } catch (x) { /* not kept */ }
-  }
+  if (!list) list = memoWebs_(webs_(ctx).list);
   return list.filter(function (w) { return w.code === c; })[0] || null;
+}
+// Keeps the list of webs just read (web.enter, web.check, and web.mine of the page OPS 602, so that going back to it
+// and then into another web needs no sheet either).
+function memoWebs_(all) {
+  const list = all.map(function (w) { return { code: w.code, name: w.name, link: w.link, open: w.open }; });
+  try { CacheService.getScriptCache().put('wl', JSON.stringify(list), OPT.memoSeconds); } catch (x) { /* not kept */ }
+  return list;
 }
 
 // setup(): the column of web access, added at the end of the header row (and of every repeated header row) when it
@@ -1020,8 +1024,9 @@ function opWebEnter_(ctx, req) {
 // access, so their codes cannot be learnt here, and no name or link. The E ADMIN page still shows no list of webs, and
 // every web still checks its own access with web.enter: this list only decides which icons the page shows.
 function opWebMine_(ctx, req) {
-  const p = auth_(ctx, req);
-  const webs = webs_(ctx).list.filter(function (w) { return w.open; })
+  const p = auth_(ctx, req), all = webs_(ctx).list;
+  memoWebs_(all);
+  const webs = all.filter(function (w) { return w.open; })
     .map(function (w) { return { code: w.code, role: webRole_(ctx, p, w.code) }; })
     .filter(function (w) { return !!w.role; });
   return { user: user_(ctx, p), expiresAt: ctx.exp, webs: webs };

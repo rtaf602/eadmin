@@ -507,6 +507,8 @@ enter(S, 'REPORT');
 { const p0 = enter(S, 'REPORT').pass; wa(S, 'somchai_t', { REPORT: 'Editor' });
   const e3 = enter(sSom2, 'REPORT'), c4 = wc(e3.pass, 'REPORT'); wa(S, 'somchai_t', { REPORT: '' });
   check('…a change made in the Admin page drops the copy of that person at once: given, then taken away', e3.ok && c4.ok && c4.role === 'Editor' && code(wc(e3.pass, 'REPORT')) === 'no_web' && code(enter(sSom2, 'REPORT')) === 'no_web' && wc(p0, 'REPORT').ok); }
+{ sim.advance(61000); const m = mine(S), o0 = sim.opens, e4 = enter(S, 'REPORT'), c5 = wc(e4.pass, 'REPORT');
+  check('…after a minute, the page OPS 602 (web.mine) reads the sheet and keeps the copy again: the web entered next opens no sheet', m.ok && e4.ok && c5.ok && sim.opens === o0, sim.opens - o0); }
 // a second device waits for the account; the back end of the web asks with the pass of the first one
 wa(S, 'somchai_t', { REPORT: 'Viewer' });
 const passSom2 = enter(sSom2, 'REPORT').pass;
