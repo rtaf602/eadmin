@@ -209,7 +209,7 @@ check('no access: the agreed message, the plan not shown, a way back to the logi
 await N.page.screenshot({ path: path.join(OUT, '3-noweb.png') });
 
 const B2 = await device('editor-2');
-await B2.page.goto(ORIGIN + '/eadmin/index.html'); await signIn(B2.page, 'thana_t', PW.thana, 3);
+await B2.page.goto(ORIGIN + '/eadmin/index.html?admin'); await signIn(B2.page, 'thana_t', PW.thana, 3);
 await A.page.waitForSelector('#app-take:not([hidden])', { timeout: 15000 });
 check('1.12.1 on the seat plan: the notice of a login from another device', /มีผู้ Login เข้าใช้งานบัญชีนี้จากเครื่องอื่น/.test(await A.page.innerText('#app-take')));
 await A.page.click('#app-deny');

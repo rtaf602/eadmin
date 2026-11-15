@@ -230,14 +230,14 @@ check('…the login page reached from a web is titled LOGIN PAGE, not E ADMIN SI
   const logo = async (pg) => pg.$eval('.mast .logo', (i) => i.complete && i.naturalWidth > 0 && i.getBoundingClientRect().width >= 60);
   check('the login page shows the crest of ฝูง.602 (the logo of the OPS 602 app)', await logo(S.page));
   const plain = await (await browser.newContext()).newPage();
-  await plain.goto(ORIGIN + '/eadmin/index.html');
-  check('opened directly (no ?next=): still E ADMIN SITE', /^E ADMIN SITE\s+SQUADRON 602$/.test((await plain.textContent('#brand')).trim()) && (await plain.title()) === 'E ADMIN SITE · SQUADRON 602', await plain.textContent('#brand'));
+  await plain.goto(ORIGIN + '/eadmin/index.html?admin');
+  check('opened with ?admin (developer mode of OPS 602): E ADMIN SITE', /^E ADMIN SITE\s+SQUADRON 602$/.test((await plain.textContent('#brand')).trim()) && (await plain.title()) === 'E ADMIN SITE · SQUADRON 602', await plain.textContent('#brand'));
   check('…with the same crest', await logo(plain));
   const inst = await plain.evaluate(() => ({ manifest: document.querySelector('link[rel=manifest]')?.getAttribute('href'), icon: document.querySelector('link[rel=apple-touch-icon]')?.getAttribute('href'), title: document.querySelector('meta[name=apple-mobile-web-app-title]')?.content }));
   check('"Install" on the login page installs the OPS 602 app (its manifest and icon, from /app/)', inst.manifest === '/app/manifest.webmanifest' && inst.icon === '/app/icons/apple-touch-icon.png' && inst.title === 'OPS 602', inst);
   const bad2 = await (await browser.newContext()).newPage();
   await bad2.goto(ORIGIN + '/eadmin/index.html?next=' + encodeURIComponent('//evil.example/x'));
-  check('a ?next= that leaves this site does not rename the page', /^E ADMIN SITE/.test((await bad2.textContent('#brand')).trim()), await bad2.textContent('#brand'));
+  check('a ?next= that leaves this site is not taken: the plain login page of ฝูง.602', /^LOGIN PAGE/.test((await bad2.textContent('#brand')).trim()), await bad2.textContent('#brand'));
   await S.ctx.close();
 }
 await signIn(A.page, 'thana_t', PW.thana, 3);
@@ -257,7 +257,7 @@ await A.page.waitForSelector('.lockbar.mine', { timeout: 10000 });
 check('Editor: edit mode, the edit lock taken', /คุณกำลังแก้ไขแผน/.test(await A.page.innerText('#lockBar')));
 
 const V = await device('viewer');
-await V.page.goto(ORIGIN + '/eadmin/index.html');
+await V.page.goto(ORIGIN + '/eadmin/index.html?admin');
 await signIn(V.page, 'phum_s', PW.phum, 5);
 await V.page.waitForSelector('#inside:not([hidden])');
 check('the login page lists no webs after login', !/Master Plan 3 เดือน/.test(await V.page.content()));
@@ -276,12 +276,12 @@ await N.page.waitForURL(ORIGIN + '/3mcalendar/');
 await N.page.waitForSelector('#lockGo:not([hidden])', { timeout: 15000 });
 check('no access: the plan is not shown, the agreed message, a way back to the login page', (await N.page.isHidden('#app')) && /บัญชีนี้ไม่มีสิทธิ์ใช้งานเว็บนี้ ให้ติดต่อ Admin/.test(await N.page.innerText('#lockErr')) && !/ภารกิจทดลอง/.test(await N.page.content()));
 await N.page.screenshot({ path: path.join(OUT, '3-noweb.png') });
-await N.page.click('#lockGo'); await N.page.waitForURL(ORIGIN + '/eadmin/index.html');
-check('…the way back leads to the login page, signed in, without a loop', (await N.page.isVisible('#inside')) && N.page.url() === ORIGIN + '/eadmin/index.html');
+await N.page.click('#lockGo'); await N.page.waitForURL(ORIGIN + '/app/');
+check('…the way back leads through the login page, signed in, on to OPS 602 (/app/), without a loop', N.page.url() === ORIGIN + '/app/');
 
 // another device logs in with the editor's account: the calendar page shows the notice of the login system
 const B2 = await device('editor-2');
-await B2.page.goto(ORIGIN + '/eadmin/index.html');
+await B2.page.goto(ORIGIN + '/eadmin/index.html?admin');
 await signIn(B2.page, 'thana_t', PW.thana, 3);
 await A.page.waitForSelector('#app-take:not([hidden])', { timeout: 15000 });
 check('1.12.1 on the calendar page: the notice of a login from another device, with the countdown and the refuse button', /มีผู้ Login เข้าใช้งานบัญชีนี้จากเครื่องอื่น/.test(await A.page.innerText('#app-take')) && (await A.page.isVisible('#app-deny')));
@@ -313,10 +313,10 @@ check('…logged in again: back on the calendar', true);
 const X = await device('evil');
 await X.page.goto(ORIGIN + '/eadmin/index.html?next=' + encodeURIComponent('//evil.example/x'));
 await signIn(X.page, 'chan_t', PW.chan, 8);
-await X.page.waitForSelector('#inside:not([hidden])', { timeout: 15000 });
-check('?next= that points away from this site is ignored', X.page.url().startsWith(ORIGIN + '/eadmin/'));
-await X.page.goto(ORIGIN + '/eadmin/index.html');
-check('the login page opened by itself is titled E ADMIN SITE', /^E ADMIN SITE/.test((await X.page.innerText('#brand')).trim()));
+await X.page.waitForURL(ORIGIN + '/app/', { timeout: 15000 }).catch(() => {});
+check('?next= that points away from this site is ignored (on to OPS 602 instead)', X.page.url() === ORIGIN + '/app/', X.page.url());
+await X.page.goto(ORIGIN + '/eadmin/index.html?admin');
+check('the login page opened with ?admin is titled E ADMIN SITE', /^E ADMIN SITE/.test((await X.page.innerText('#brand')).trim()));
 
 const sessionsSeen = await Promise.all([A, V, N, X].map((d) => d.page.evaluate(() => (JSON.parse(localStorage.getItem('eadmin602:session') || 'null') || {}).token || '').catch(() => '')));
 check('the pages never sent a session to the calendar back end, only passes', calBodies.length > 5 && calBodies.every((b) => /"pass":"[^"]{40,}"/.test(b)) && calBodies.every((b) => !/"session"/.test(b)) && !sessionsSeen.filter(Boolean).some((t) => calBodies.some((b) => b.includes(t))), calBodies.length);

@@ -21,12 +21,12 @@
       <p class="unit">ฝูง.602 บน.6</p>
       <h1 class="brand" id="brand">E ADMIN SITE <span>SQUADRON 602</span></h1>
       <script>
-        // reached from the page of another web (?next=, the same check as App.next()): this is that web's login page.
+        // This is the login page of ฝูง.602 (after it: the way back from ?next=, or OPS 602 /app/), except with ?admin
+        // (the developer-mode button of OPS 602, the links of admin.html): then it is E ADMIN SITE and stays here.
         // Named here, before the page is first drawn, so E ADMIN SITE is not seen while the scripts below still load.
         (function () {
           try {
-            var v = new URLSearchParams(location.search).get('next') || '';
-            if (/^\/(?!\/)[A-Za-z0-9._~%\-\/]{0,200}$/.test(v) && v.indexOf('..') < 0) { document.getElementById('brand').firstChild.textContent = 'LOGIN PAGE '; document.title = 'LOGIN PAGE · SQUADRON 602'; }
+            if (!new URLSearchParams(location.search).has('admin')) { document.getElementById('brand').firstChild.textContent = 'LOGIN PAGE '; document.title = 'LOGIN PAGE · SQUADRON 602'; }
           } catch (e) { /* the page script below names it once it has loaded */ }
         })();
       </script>
@@ -100,10 +100,11 @@
   const { $, esc, api, session, signIn, signOut, farewell, giveUp, flash, watch, fmtT, beYear, years, buildDP, dp, setDP } = App;
   buildDP('birth', years(beYear() - 17, beYear() - 90));
   let waiting = null;
-  // came here from a page of another web (?next=): back there once this browser has a login
-  const back = App.next();
-  // came from a page of another web: this page is its login page, not the way into E ADMIN
-  if (back) { $('brand').firstChild.textContent = 'LOGIN PAGE '; document.title = 'LOGIN PAGE · SQUADRON 602'; }
+  // after the login: back to the page of another web (?next=), otherwise to OPS 602 (/app/, ผู้ใช้สั่ง 15 พ.ย.)
+  // ?admin (developer mode of OPS 602, links of admin.html): E ADMIN SITE, stays here
+  const adminMode = new URLSearchParams(location.search).has('admin');
+  const back = App.next() || (adminMode ? '' : location.origin + '/app/');
+  if (!adminMode) { $('brand').firstChild.textContent = 'LOGIN PAGE '; document.title = 'LOGIN PAGE · SQUADRON 602'; }
   const goBack = () => { if (back && session()) { location.replace(back); return true; } return false; };                                              // { ticket, username, timer }: this device waits for the one in use (ข้อ 1.12.2)
 
   // ข้อ 1.11.1: with an account signed in, the page says which one and shows no login form

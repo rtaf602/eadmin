@@ -17,7 +17,13 @@ window.App = (() => {
   const HOME = (() => { try { return new URL('../', document.currentScript.src).href; } catch (e) { return new URL('./', location.href).href; } })();
   const foreign = location.href.indexOf(HOME) !== 0;                                     // a page of another web
   // the login page; from another web it carries the way back (path only, same site), used after the next login
-  function loginUrl() { return HOME + 'index.html' + (foreign ? '?next=' + encodeURIComponent(location.pathname) : ''); }
+  // a page of E ADMIN itself (admin.html): the login page as E ADMIN SITE (?admin), which stays there after the login;
+  // the login page itself keeps what it was opened with
+  function loginUrl() {
+    if (foreign) return HOME + 'index.html?next=' + encodeURIComponent(location.pathname);
+    const own = location.href.split(/[?#]/)[0];
+    return HOME + 'index.html' + (own === HOME || own === HOME + 'index.html' ? location.search : '?admin');
+  }
   const esc = (s) => String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   /* ---------- the session: one for the whole browser (ข้อ 1.11) ----------
