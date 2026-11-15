@@ -19,7 +19,7 @@
     <div class="who">
       <span class="chip" id="me-name"></span>
       <span class="chip acc" id="me-role"></span>
-      <a class="btn small" href="index.html">หน้าแรก</a>
+      <a class="btn small" href="index.html?admin">หน้าแรก</a>
       <button type="button" class="btn small" id="out">ออกจากระบบ</button>
     </div>
   </header>
@@ -27,7 +27,7 @@
   <p class="note" id="wait">กำลังโหลดรายชื่อ…</p>
   <div class="note bad" id="denied" role="alert" hidden>
     <p id="denied-t"></p>
-    <div class="actions"><a class="btn small" href="index.html">กลับหน้าแรก</a><button type="button" class="btn small" id="retry" hidden>ลองอีกครั้ง</button></div>
+    <div class="actions"><a class="btn small" href="index.html?admin">กลับหน้าแรก</a><button type="button" class="btn small" id="retry" hidden>ลองอีกครั้ง</button></div>
   </div>
 
   <!-- ข้อ 1.13.7: what happened to the backup files, shown to every administrator until the main one acknowledges -->
@@ -172,7 +172,7 @@
 (() => {
   'use strict';
   const { $, esc, api, session, signOut, watch, now, fmtD, fmtDT, mmss, beYear, years, buildDP, dp, setDP, disableDP } = App;
-  if (!session()) { location.replace('index.html'); return; }
+  if (!session()) { location.replace('index.html?admin'); return; }
   const USER_RE = /^[a-z][a-z0-9_.]{2,29}$/;
   let people = [], me = null, mainAdmin = '', today = '', linkMinutes = 30, backup = [], bkBusy = false, bkErr = '';
   let target = null, mode = 'reset', confirmSelf = false, done = '', fail = '', busy = false, last = null;
@@ -510,7 +510,7 @@
   }
   api('info').then((i) => { linkMinutes = i.linkMinutes; }, () => {});
   // this browser holds one account: when another tab signs out, or signs in as someone else, this page follows
-  watch((s) => { if (!s) location.replace('index.html'); else if (s.token !== mine) location.reload(); });
+  watch((s) => { if (!s) location.replace('index.html?admin'); else if (s.token !== mine) location.reload(); });
   load();
   setInterval(() => { if (last) linkbox(); }, 1000);
 })();

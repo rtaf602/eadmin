@@ -39,7 +39,7 @@ async function device(name, opts) {
     return page.innerText((await page.isVisible('#done')) ? '#done-t' : '#dead');
   };
   const login = async (user, pw, n, wrongYear) => {
-    await page.goto(sim.siteUrl); await page.waitForSelector('#login:not([hidden])');
+    await page.goto(sim.siteUrl + '?admin'); await page.waitForSelector('#login:not([hidden])');
     await page.fill('#user', user); await page.fill('#pw', pw); await page.fill('#card', String(idGov(n))); await birth('birth', 1, 1, wrongYear || 2530);
     await page.click('#go');
     await page.waitForFunction(() => !document.getElementById('inside').hidden || !document.getElementById('msg').hidden || !document.getElementById('waiting').hidden);
@@ -76,11 +76,11 @@ check('the page without a link says so', /One Time Link/.test(await A.page.inner
 /* ---------- login ---------- */
 check('login with a wrong password: the one general message', /ข้อมูลไม่ถูกต้อง หรือบัญชียังไม่พร้อมใช้งาน/.test(await A.login('chan_t', 'Wrong-Password-00', 8)));
 check('login with a wrong year of birth: the same message', /ข้อมูลไม่ถูกต้อง หรือบัญชียังไม่พร้อมใช้งาน/.test(await A.login('chan_t', PW.chan, 8, 2531)));
-await A.page.goto(sim.siteUrl); await A.page.click('#go');
+await A.page.goto(sim.siteUrl + '?admin'); await A.page.click('#go');
 check('login with empty fields is stopped in the page', /กรอกให้ครบ/.test(await A.page.innerText('#msg')));
 check('login as the main administrator', (await A.login('chan_t', PW.chan, 8)) === 'in');
 check('after login: name, Role, no list of webs, the way to the Admin page', /ชาญ ตัวอย่างหลัก/.test(await A.page.innerText('#in-name')) && /Role ของบัญชี: Admin หลัก/.test(await A.page.innerText('#in-chips')) && !(await A.page.$('#in-noweb')) && (await A.page.isVisible('#to-admin')));
-check('the login page says how long a session lasts (ข้อ 1.10)', /ใช้งานได้ 1 ชั่วโมง/.test(await A.page.goto(sim.siteUrl).then(() => A.page.waitForSelector('#hours:not([hidden])', { state: 'attached' })).then(() => A.page.evaluate(() => document.getElementById('hours').textContent))));
+check('the login page says how long a session lasts (ข้อ 1.10)', /ใช้งานได้ 1 ชั่วโมง/.test(await A.page.goto(sim.siteUrl + '?admin').then(() => A.page.waitForSelector('#hours:not([hidden])', { state: 'attached' })).then(() => A.page.evaluate(() => document.getElementById('hours').textContent))));
 check('the login is kept for the whole browser, not for one tab, and the password fields are emptied', (await A.page.evaluate(() => Object.keys(sessionStorage).join() + '|' + Object.keys(localStorage).filter((k) => /session/.test(k)).join())) === '|eadmin602:session' && (await A.page.inputValue('#pw')) === '');
 check('signed in: the page says which account and shows no login form (ข้อ 1.11.1)', (await A.page.isHidden('#login')) && (await A.page.isVisible('#inside')) && /chan_t/.test(await A.page.innerText('#in-chips')) && (await A.page.isVisible('#out')));
 await A.page.screenshot({ path: path.join(OUT, 'login-inside.png'), fullPage: true });
@@ -127,7 +127,7 @@ check('the user logs in: User, no list of webs, no way to the Admin page', (awai
 await B.admin();
 check('a Viewer who types the address of the Admin page is refused by the back end', (await B.page.isVisible('#denied')) && /ไม่มี Role Admin/.test(await B.page.innerText('#denied-t')) && (await B.page.isHidden('#bench')));
 const C0 = await device('nobody'); await C0.page.goto(sim.siteUrl + 'admin.html'); await C0.page.waitForSelector('#login');
-check('the Admin page without a login goes to the login page', (await C0.page.url()) === sim.siteUrl + 'index.html' || (await C0.page.url()) === sim.siteUrl);
+check('the Admin page without a login goes to the login page, as E ADMIN SITE', (await C0.page.url()) === sim.siteUrl + 'index.html?admin' && /^E ADMIN SITE/.test((await C0.page.innerText('#brand')).trim()));
 
 /* ---------- another administrator ---------- */
 const C = await device('second-admin');
@@ -163,12 +163,12 @@ await A.page.check('#m-role');
 check('CHANGE ROLE: the button says so, and there is nothing to save yet', (await A.page.innerText('#go')) === 'บันทึก Role' && (await A.page.isDisabled('#go')) && (await A.page.innerText('#go-why')) === 'ยังไม่มีการเปลี่ยนแปลง');
 await A.page.selectOption('#role', 'Admin'); await A.save();
 check('CHANGE ROLE saved at once and logged', /มี Role Admin/.test(await A.page.innerText('#done')) && cell('phum_s', 10) === 'Admin' && log().some((r) => r[1] === 'CHANGE_ROLE' && r[5] === 'phum_s' && r[8] === 'Admin' && r[9] === 'User'));
-await B.page.goto(sim.siteUrl); await B.page.waitForFunction(() => /Role ของบัญชี: Admin/.test(document.getElementById('in-chips').textContent));
+await B.page.goto(sim.siteUrl + '?admin'); await B.page.waitForFunction(() => /Role ของบัญชี: Admin/.test(document.getElementById('in-chips').textContent));
 check('the user sees the new Role on the next visit, without logging in again', (await B.page.isVisible('#to-admin')));
 await A.pick('ภูมิ'); await A.page.check('#m-role'); await A.birth('end', 1, 1, await A.page.evaluate(() => App.beYear()));
 await A.save();
 check('an end date in the past is saved and shown', /เลยวันสิ้นสุด 1 ม\.ค\./.test(await A.page.innerText('#who-info')), await A.page.innerText('#who-info'));
-await B.page.goto(sim.siteUrl); await B.page.waitForSelector('#flash:not([hidden])');
+await B.page.goto(sim.siteUrl + '?admin'); await B.page.waitForSelector('#flash:not([hidden])');
 check('the user is put out, with the agreed message', /สิ้นสุดระยะเวลาในการเข้าถึงข้อมูลของท่าน หากต้องการขยายระยะเวลา ให้ติดต่อ Admin/.test(await B.page.innerText('#flash')) && (await B.page.isVisible('#login')) && (await stored(B)) === null);
 check('…and cannot log in again', /สิ้นสุดระยะเวลา/.test(await B.login('phum_s', PW.phum, 5)));
 await A.page.click('#out'); await A.page.waitForSelector('#login:not([hidden])');
@@ -177,7 +177,7 @@ check('"ออกจากระบบ" forgets the login', (await stored(A)) ==
 /* ---------- one browser, one account (ข้อ 1.11) ---------- */
 const T = await device('two-tabs'), tab2 = await T.ctx.newPage();
 tab2.on('pageerror', (e) => errors.push('tab2 PAGEERROR ' + e.message));
-await tab2.goto(sim.siteUrl); await tab2.waitForSelector('#login:not([hidden])');
+await tab2.goto(sim.siteUrl + '?admin'); await tab2.waitForSelector('#login:not([hidden])');
 check('the main administrator signs in in one tab', (await T.login('chan_t', PW.chan, 8)) === 'in');
 await tab2.waitForSelector('#inside:not([hidden])');
 check('1.11 the other tab of the same browser is signed in too: the same account, no form', (await tab2.isHidden('#login')) && /chan_t/.test(await tab2.innerText('#in-chips')));
@@ -193,12 +193,12 @@ await T.page.waitForFunction(() => /thana_t/.test(document.getElementById('in-ch
 check('1.11.2 two logins cross in one browser: the later account stays, the earlier one is signed out, and the page says so', (await T.page.innerText('#overlap')) === 'ตรวจพบการเข้าสู่ระบบซ้อนกันในเบราว์เซอร์นี้ บัญชี chan_t ถูกออกจากระบบแล้ว ทุกแท็บใช้บัญชี thana_t' && JSON.parse(await stored(T)).user.username === 'thana_t', await T.page.innerText('#overlap'));
 await tab2.waitForSelector('#denied:not([hidden])');
 check('…the other tab follows: it now runs as the later account, which is no administrator', /ไม่มี Role Admin/.test(await tab2.innerText('#denied-t')) && (await tab2.isHidden('#bench')));
-await tab2.goto(sim.siteUrl); await tab2.waitForSelector('#inside:not([hidden])');
+await tab2.goto(sim.siteUrl + '?admin'); await tab2.waitForSelector('#inside:not([hidden])');
 await T.page.click('#out'); await T.page.waitForSelector('#login:not([hidden])');
 await tab2.waitForSelector('#login:not([hidden])');
 check('1.11.3 signing out in one tab signs out every tab of that browser', (await tab2.isHidden('#inside')) && (await stored(T)) === null);
 await tab2.goto(sim.siteUrl + 'admin.html'); await tab2.waitForSelector('#login');
-check('…and the Admin page in the other tab is closed too', (await tab2.url()).replace(/index\.html$/, '') === sim.siteUrl);
+check('…and the Admin page in the other tab is closed too (to the login page as E ADMIN SITE)', (await tab2.url()) === sim.siteUrl + 'index.html?admin');
 await tab2.close();
 
 /* ---------- one account, one device (ข้อ 1.12) ---------- */
@@ -230,7 +230,7 @@ check('device 1 signs in while the other has the page closed: it waits at first'
 sim.advance(31000);
 await D1.page.waitForSelector('#inside:not([hidden])');
 check('1.12.3 …and is let in once 30 seconds have passed without a word from the other', /thana_t/.test(await D1.page.innerText('#in-chips')));
-await D2.page.goto(sim.siteUrl); await D2.page.waitForSelector('#flash:not([hidden])');
+await D2.page.goto(sim.siteUrl + '?admin'); await D2.page.waitForSelector('#flash:not([hidden])');
 check('…the device that had the page closed finds itself signed out when it comes back, with the reason', (await D2.page.innerText('#flash')) === TAKEN && (await D2.page.isVisible('#login')) && (await stored(D2)) === null);
 
 /* ---------- the password is changed (ข้อ 1.9) ---------- */
@@ -280,7 +280,7 @@ await C.admin(); await C.pick('ธนา');
 check('1.14.2.4.1 another administrator: no web access, no list of webs, not a word of them on the page', (await C.page.isHidden('#webbox')) && (await C.page.isHidden('#wl')) && !/AIRCRAFT|สิทธิ์เข้าใช้งานเว็บ|รายชื่อเว็บ/.test(await C.page.innerText('body')));
 await C.page.check('#m-role');
 check('1.14.4.6 another administrator on a User account: the second choice is the end date, Admin cannot be chosen', (await C.page.innerText('#m-role-t')) === 'เปลี่ยนวันสิ้นสุดการใช้งาน' && (await C.page.innerText('#go')) === 'บันทึกวันสิ้นสุด' && (await C.page.evaluate(() => document.querySelector('#role option[value=Admin]').disabled)));
-await D1.page.goto(sim.siteUrl); await D1.page.waitForSelector('#inside:not([hidden])');
+await D1.page.goto(sim.siteUrl + '?admin'); await D1.page.waitForSelector('#inside:not([hidden])');
 check('after login the page lists no webs: not which ones, not their Roles (12 พ.ย.)', !(await D1.page.$('#in-webs')) && !/AIRCRAFT|REPORT|สถานภาพอากาศยาน|example\.github\.io/.test(await D1.page.content()));
 const enterAs = (dev, code) => dev.page.evaluate((c) => App.enterWeb(c).then((r) => r.web.role, (e) => e.code), code);
 check('1.14.3.5 a page of the web asks the back end: Editor here; a web without access is refused', (await enterAs(D1, 'AIRCRAFT')) === 'Editor' && (await enterAs(D1, 'REPORT')) === 'no_web');
@@ -302,7 +302,7 @@ check('1.10.1 five minutes before the hour is over the page warns to save the wo
 await M.page.screenshot({ path: path.join(OUT, 'admin-warning.png') });
 sim.advance(4.5 * 60000);
 await M.page.waitForSelector('#login:not([hidden])');
-check('1.10.2 when the hour is over: back to the login page with the agreed message', (await M.page.innerText('#flash')) === 'หมดเวลาใช้งาน ให้เข้าสู่ระบบใหม่' && (await stored(M)) === null && (await M.page.url()).replace(/index\.html$/, '') === sim.siteUrl, await M.page.innerText('#flash'));
+check('1.10.2 when the hour is over: back to the login page with the agreed message', (await M.page.innerText('#flash')) === 'หมดเวลาใช้งาน ให้เข้าสู่ระบบใหม่' && (await stored(M)) === null && (await M.page.url()) === sim.siteUrl + 'index.html?admin', await M.page.innerText('#flash'));
 check('…and logging in again gives a new hour', (await M.login('chan_t', PW.chan, 8)) === 'in' && /ใช้งานได้ถึง/.test(await M.page.innerText('#in-chips')));
 await M.page.click('#out'); await M.page.waitForSelector('#login:not([hidden])');
 
@@ -325,10 +325,10 @@ check('the pages loaded nothing from any other site', outside.length === 0, outs
 
 /* ---------- when things are missing ---------- */
 sim.noBackend = true;
-const D = await device('unset'); await D.page.goto(sim.siteUrl);
+const D = await device('unset'); await D.page.goto(sim.siteUrl + '?admin');
 check('without a back-end address the login page says so', /assets\/config\.js/.test(await D.page.innerText('#flash')) && (await D.page.isDisabled('#go')));
 sim.noBackend = false; sim.down = true;
-const E = await device('offline'); await E.page.goto(sim.siteUrl); await E.page.fill('#user', 'chan_t'); await E.page.fill('#pw', PW.chan); await E.page.fill('#card', '1'); await E.birth('birth', 1, 1, 2530); await E.page.click('#go'); await E.page.waitForSelector('#msg:not([hidden])');
+const E = await device('offline'); await E.page.goto(sim.siteUrl + '?admin'); await E.page.fill('#user', 'chan_t'); await E.page.fill('#pw', PW.chan); await E.page.fill('#card', '1'); await E.birth('birth', 1, 1, 2530); await E.page.click('#go'); await E.page.waitForSelector('#msg:not([hidden])');
 check('when the back end cannot be reached the page says so', /ติดต่อระบบไม่ได้/.test(await E.page.innerText('#msg')));
 sim.down = false;
 
@@ -339,6 +339,25 @@ await F.login('chan_t', PW.chan, 8); const fit1 = await fits();
 await F.admin(); await F.pick('ธนา'); const fit2 = await fits(); await F.page.screenshot({ path: path.join(OUT, 'admin-phone.png'), fullPage: true });
 await F.page.goto(sim.siteUrl + 'set-password.html'); await F.page.waitForSelector('#dead:not([hidden])');
 check('at phone width no page scrolls sideways', fit1 && fit2 && (await fits()), [fit1, fit2]);
+
+// ผู้ใช้สั่ง 15 พ.ย.: the login page opened by itself (no ?next=, no ?admin) is the login of ฝูง.602 and leads to OPS 602 (/app/)
+{
+  const H = await device('hub');
+  await H.page.route('**/app/', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>OPS 602</title>OPS 602' }));
+  await H.page.goto(sim.siteUrl); await H.page.waitForSelector('#login:not([hidden])');
+  check('the login page opened by itself is titled LOGIN PAGE', /^LOGIN PAGE\s+SQUADRON 602$/.test((await H.page.innerText('#brand')).trim()) && (await H.page.title()) === 'LOGIN PAGE · SQUADRON 602', await H.page.innerText('#brand'));
+  await H.page.fill('#user', 'chan_t'); await H.page.fill('#pw', PW.chan); await H.page.fill('#card', String(idGov(PEOPLE.find((p) => p.user === 'chan_t').n))); await H.birth('birth', 1, 1, 2530);
+  const HUB = new URL('/app/', sim.siteUrl).href;
+  await H.page.click('#go'); await H.page.waitForURL(HUB, { timeout: 40000 }).catch(() => {});
+  check('…after the login it goes to OPS 602 (/app/), not to E ADMIN', H.page.url() === HUB, H.page.url());
+  await H.page.goto(sim.siteUrl); await H.page.waitForURL(/\/app\/$/, { timeout: 15000 }).catch(() => {});
+  check('…opened again while signed in: straight to OPS 602', /\/app\/$/.test(H.page.url()), H.page.url());
+  await H.page.goto(sim.siteUrl + '?admin'); await H.page.waitForSelector('#inside:not([hidden])');
+  check('…with ?admin (developer mode of OPS 602) it is E ADMIN SITE and stays, signed in', /^E ADMIN SITE/.test((await H.page.innerText('#brand')).trim()) && H.page.url() === sim.siteUrl + '?admin');
+  await H.page.goto(sim.siteUrl + 'set-password.html'); 
+  check('…the link of the page that sets a password leads to that same login page (then OPS 602)', (await H.page.getAttribute('a[href^="index.html"]', 'href')) === 'index.html');
+  await H.page.goto(sim.siteUrl + '?admin'); await H.page.click('#out'); await H.page.waitForSelector('#login:not([hidden])');
+}
 
 await browser.close(); sim.close();
 console.log(bad.length ? bad.length + ' check(s) FAILED' : 'all checks passed');
